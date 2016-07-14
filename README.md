@@ -12,7 +12,7 @@ var Check = require('freeman-check')
 
 var user = {
 	name: "Nabil Freeman",
-	favourite_films: "Face/Off, Bad Lieutenant, The Wicker Man"
+	favourite_films: ["Face/Off", "Bad Lieutenant", "The Wicker Man"]
 }
 
 var check = Check(user, {
