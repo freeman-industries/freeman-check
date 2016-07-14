@@ -1,0 +1,19 @@
+{
+  "name": "freeman-check",
+  "version": "1.0.0",
+  "description": "Easy type and format checking on JavaScript objects",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/freeman-industries/freeman-check.git"
+  },
+  "author": "Freeman Industries <nabil@instafork.com> (http://freemans.website)",
+  "bugs": {
+    "url": "https://github.com/freeman-industries/freeman-check/issues"
+  },
+  "homepage": "https://github.com/freeman-industries/freeman-check#readme",
+  "license": "ISC"
+}
