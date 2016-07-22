@@ -32,6 +32,30 @@ var CheckError = function(message){
 
 CheckError.prototype = new Error();
 
+var joinOptionalParameters = function(item, required_format, optional_root_object){
+	if(optional_root_object === undefined){
+		return required_format;
+	}
+
+	var item_keys = Object.keys(item);
+	var required_keys = Object.keys(required_format);
+	var optional_keys = Object.keys(optional_root_object);
+
+	//check if there are more keys in the root object than the desired format.
+	//if there are, this means that there might be an optional parameter passed.
+	if(item_keys.length <= required_keys.length){
+		return required_format; //there are not more keys.
+	}
+
+	//there are more keys in the item than the required format...
+	//so let's join the optional object onto the map we are testing against.
+	optional_keys.forEach(function(key){
+		required_format[key] = optional_root_object[key];
+	})
+
+	return required_format;
+};
+
 var type = function(element, already_defined){
 	var type_string;
 
@@ -134,7 +158,7 @@ var recurse = function(child, required){
 				//activate the recurse function...
 				recurse(child[key], required[key])
 			
-			} else if(child_type === required_type){
+			} else if(required_type.indexOf(child_type) > -1){
 			
 				//do nothing! we can stop the recursion on this one. the key is a match.
 			
@@ -150,8 +174,10 @@ var recurse = function(child, required){
 }
 
 var main = {
-	test: function(item, required_format){
+	test: function(item, required_format, optional_parameters){
 		try{
+			required_format = joinOptionalParameters(item, required_format, optional_parameters);
+
 			recurse(item, required_format);
 
 			return true;
