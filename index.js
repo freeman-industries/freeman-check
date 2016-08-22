@@ -175,6 +175,14 @@ var recurse = function(child, required){
 
 var main = {
 	test: function(item, required_format, optional_parameters){
+		if(item === null || item === undefined){
+			return new CheckError('The first argument is null or undefined.')
+		}
+
+		if(item === null || item === undefined){
+			return new CheckError('The second argument is null or undefined.')
+		}
+
 		try{
 			required_format = joinOptionalParameters(item, required_format, optional_parameters);
 
@@ -186,8 +194,6 @@ var main = {
 				error.message.full_expected_payload = required_format;
 				return error;
 			} else {
-				Reporting.bug('Check.test', error);
-
 				return new CheckError('System error. Our coders have been notified of this event.')
 			}
 		}
