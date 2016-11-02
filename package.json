@@ -1,6 +1,6 @@
 {
   "name": "freeman-check",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "description": "Easy type and format checking on JavaScript objects",
   "main": "index.js",
   "scripts": {
@@ -15,5 +15,10 @@
     "url": "https://github.com/freeman-industries/freeman-check/issues"
   },
   "homepage": "https://github.com/freeman-industries/freeman-check#readme",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "anora": "^1.0.1",
+    "bluebird": "^3.4.6",
+    "jsonschema": "^1.1.0"
+  }
 }

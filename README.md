@@ -10,23 +10,39 @@ npm install freeman-check --save
 ```
 var Check = require('freeman-check')
 
-var user = {
+var object = {
 	name: "Nabil Freeman",
-	favourite_films: ["Face/Off", "Bad Lieutenant", "The Wicker Man"]
+	favourite_films: [
+		"Face/Off",
+		"Bad Lieutenant",
+		"The Wicker Man"
+	]
 }
 
-var check = Check(user, {
-	name: "string",
-	favourite_films: "array",
-	profile: {
-		email: "string",
-		sign_in_count: "number"
-	}
+var schema = {
+	type: "object",
+	properties: {
+		name: {
+			type: "string"
+		}
+		email: {
+			type: "string",
+			format: "email"
+		},
+		favourite_films: {
+			type: "array",
+			items: {
+				type: "string"
+			}
+		}
+	},
+	required: ["name", "email", "favourite_films"]
+};
+
+Check.test(some_object, schema).then(function(object){
+	console.log(object) //object === some_object
+}).catch(function(error){
+	console.log(error.message) // "`email` is missing." // "`email` is malformatted." // etc...
+	console.log(error.schema) //error.schema === schema
 })
-
-if(check instanceof Check.Error){
-	console.log(check.message);
-}
 ```
-
-The above will throw a `not found` error as `profile` is missing.
