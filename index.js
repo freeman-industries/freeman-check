@@ -79,6 +79,9 @@ var main = {
 
 				//assign plain english to error messages.
 				switch(error.name){
+					case "additionalProperties":
+						problem = "is not allowed";
+					break;
 					case "required":
 						problem = "is missing";
 					break;

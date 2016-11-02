@@ -1,6 +1,6 @@
 {
   "name": "freeman-check",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Easy type and format checking on JavaScript objects",
   "main": "index.js",
   "scripts": {
