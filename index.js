@@ -90,7 +90,14 @@ var main = {
 					break;
 					case "type":
 						subject = error.property.replace("instance.", "");
-						problem = 'needs to be ' + anora(error.schema.type) +  ' `' + error.schema.type + '`'
+
+						var type = error.schema.type;
+
+						if(typeof type !== "string"){
+							type = JSON.stringify(type);
+						}
+
+						problem = 'needs to be ' + anora(type) +  ' `' + type + '`'
 					break;
 				}
 
