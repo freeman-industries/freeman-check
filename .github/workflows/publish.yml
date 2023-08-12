@@ -6,7 +6,9 @@ on:
       - master # or your default branch name
 
 jobs:
-  build:
+  publish:
+    needs: test
+
     runs-on: ubuntu-latest
 
     steps:

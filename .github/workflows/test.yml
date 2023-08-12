@@ -9,7 +9,7 @@ on:
       - master # or the name of your default branch
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
 
     steps:
