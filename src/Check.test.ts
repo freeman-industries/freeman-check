@@ -5,12 +5,13 @@ import { Schema } from 'jsonschema';
 
 describe('Check class', () => {
 	// Schema for testing
-	const schema = {
+	const schema: Schema = {
 		type: 'object',
 		properties: {
 			name: { type: 'string' },
 			email: { type: 'string', format: 'email' },
 			favourite_films: { type: 'array', items: { type: 'string' } },
+			website: { type: 'string', format: 'uri' },
 		},
 		required: ['name', 'email', 'favourite_films'],
 	};
@@ -21,6 +22,7 @@ describe('Check class', () => {
 	const name = 'Nicolas Cage';
 	const email = 'nic@cage.com';
 	const favourite_films = ['Face/Off', 'Bad Lieutenant', 'The Wicker Man'];
+	const website = 'https://freeman.sh';
 
 	describe('constructor', () => {
 		it('should throw an error if no schema is provided', () => {
@@ -56,13 +58,26 @@ describe('Check class', () => {
 			expect(() => check(schema).test(object)).to.throw(CheckError, '`email` is missing.');
 		});
 
-		it('should throw an error if object has malformatted fields', () => {
-			const object = {
-				name,
-				email: 'invalid-email',
-				favourite_films,
-			};
-			expect(() => check(schema).test(object)).to.throw(CheckError, '`email` is malformatted.');
+		describe('Format check', () => {
+			it('should throw an error if object has malformatted email', () => {
+				const object = {
+					name,
+					email: 'invalid-email',
+					favourite_films,
+					website,
+				};
+				expect(() => check(schema).test(object)).to.throw(CheckError, '`email` needs to be formatted as `email`.');
+			});
+
+			it('should throw an error if object has malformatted uri', () => {
+				const object = {
+					name,
+					email,
+					favourite_films,
+					website: 'invalid-website',
+				};
+				expect(() => check(schema).test(object)).to.throw(CheckError, '`website` needs to be formatted as `uri`.');
+			});
 		});
 
 		it('should throw an error if object has additional properties', () => {
