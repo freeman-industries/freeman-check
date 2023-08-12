@@ -3,15 +3,28 @@ import { CheckError } from './CheckError';
 import { validate, Schema } from 'jsonschema';
 import anora from 'anora';
 
+/**
+ * A class to perform validation on objects according to a specified schema.
+ */
 export class Check {
 	private schema: Schema;
 
+	/**
+	 * Constructs a new Check instance.
+	 * @param schema - The JSON Schema used for validation.
+	 * @throws {CheckError} Throws an error if the schema is not provided.
+	 */
 	constructor(schema: Schema) {
 		assert(schema, new CheckError(`Schema must be defined in constructor.`));
 
 		this.schema = schema;
 	}
 
+	/**
+	 * Tests an object against the predefined schema.
+	 * @param object - The object to validate.
+	 * @throws {CheckError} Throws an error if the object does not conform to the schema or if the schema is not initialized.
+	 */
 	test(object: unknown) {
 		if (object === null || object === undefined) {
 			throw new CheckError('The first argument is null or undefined.');
