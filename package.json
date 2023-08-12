@@ -2,8 +2,9 @@
   "name": "freeman-check",
   "version": "3.0.0",
   "description": "Easy type and format checking on JavaScript objects",
-  "main": "src/index.ts",
+  "main": "src/index",
   "scripts": {
+    "build": "bash ./build.sh",
     "lint": "npx tsc --noEmit",
     "test": "mocha -r ts-node/register 'src/**/*.test.ts'"
   },
