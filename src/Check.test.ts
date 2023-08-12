@@ -18,6 +18,10 @@ describe('Check class', () => {
 	// @ts-expect-error, allow undefined schema for testing runtime checks..
 	const check = (schema?: Schema) => new Check(schema);
 
+	const name = 'Nicolas Cage';
+	const email = 'nic@cage.com';
+	const favourite_films = ['Face/Off', 'Bad Lieutenant', 'The Wicker Man'];
+
 	describe('constructor', () => {
 		it('should throw an error if no schema is provided', () => {
 			expect(() => check()).to.throw(CheckError, 'Schema must be defined in constructor.');
@@ -37,35 +41,35 @@ describe('Check class', () => {
 
 		it('should not throw an error if object is valid', () => {
 			const object = {
-				name: 'John Doe',
-				email: 'john.doe@example.com',
-				favourite_films: ['Film1', 'Film2'],
+				name,
+				email,
+				favourite_films,
 			};
 			expect(() => check(schema).test(object)).to.not.throw();
 		});
 
 		it('should throw an error if object is missing required fields', () => {
 			const object = {
-				name: 'John Doe',
-				favourite_films: ['Film1', 'Film2'],
+				name,
+				favourite_films,
 			};
 			expect(() => check(schema).test(object)).to.throw(CheckError, '`email` is missing.');
 		});
 
 		it('should throw an error if object has malformatted fields', () => {
 			const object = {
-				name: 'John Doe',
+				name,
 				email: 'invalid-email',
-				favourite_films: ['Film1', 'Film2'],
+				favourite_films,
 			};
 			expect(() => check(schema).test(object)).to.throw(CheckError, '`email` is malformatted.');
 		});
 
 		it('should throw an error if object has additional properties', () => {
 			const object = {
-				name: 'John Doe',
-				email: 'john.doe@example.com',
-				favourite_films: ['Film1', 'Film2'],
+				name,
+				email,
+				favourite_films,
 				extra_field: 'extra',
 			};
 			expect(() => check({ ...schema, additionalProperties: false }).test(object)).to.throw(CheckError, '`extra_field` is not allowed.');
@@ -73,9 +77,9 @@ describe('Check class', () => {
 
 		it('should throw an error if object has incorrect type', () => {
 			const object = {
-				name: 'John Doe',
-				email: 'john.doe@example.com',
-				favourite_films: 'Film1', // This should be an array
+				name,
+				email,
+				favourite_films: 'Transformers', // This should be an array
 			};
 			expect(() => check(schema).test(object)).to.throw(CheckError, '`favourite_films` needs to be an `array`.');
 		});
