@@ -3,10 +3,10 @@ name: CI
 on:
   push:
     branches:
-      - main # or the name of your default branch
+      - master # or the name of your default branch
   pull_request:
     branches:
-      - main # or the name of your default branch
+      - master # or the name of your default branch
 
 jobs:
   build:
