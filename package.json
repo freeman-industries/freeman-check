@@ -1,10 +1,11 @@
 {
   "name": "freeman-check",
-  "version": "2.1.0",
+  "version": "3.0.0",
   "description": "Easy type and format checking on JavaScript objects",
-  "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "bash ./build.sh",
+    "lint": "npx tsc --noEmit",
+    "test": "mocha -r ts-node/register 'src/**/*.test.ts'"
   },
   "repository": {
     "type": "git",
@@ -18,7 +19,23 @@
   "license": "ISC",
   "dependencies": {
     "anora": "^1.1.0",
-    "bluebird": "^3.4.6",
-    "jsonschema": "^1.1.0"
+    "jsonschema": "^1.4.1"
+  },
+  "devDependencies": {
+    "@types/chai": "^4.3.5",
+    "@types/json-schema": "^7.0.12",
+    "@types/mocha": "^10.0.1",
+    "@types/node": "^16.18.0",
+    "@typescript-eslint/eslint-plugin": "^6.2.1",
+    "@typescript-eslint/parser": "^6.2.1",
+    "chai": "^4.3.7",
+    "chai-exclude": "^2.1.0",
+    "eslint": "^8.46.0",
+    "eslint-config-airbnb-base": "^15.0.0",
+    "eslint-plugin-import": "^2.27.5",
+    "json-schema-to-ts": "^2.9.1",
+    "mocha": "^10.2.0",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.0.4"
   }
 }

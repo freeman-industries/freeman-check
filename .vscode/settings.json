@@ -1,0 +1,37 @@
+{
+	"editor.tabSize": 4,
+	"editor.insertSpaces": false,
+	"files.exclude": {
+		"**/.git": true,
+		"**/.DS_Store": true
+	},
+	"files.watcherExclude": {
+		"**/node_modules": true
+	},
+	"search.exclude": {
+		"**/node_modules": true
+	},
+	"editor.formatOnSave": false,
+	"editor.defaultFormatter": null,
+	"[javascript]": {
+		"editor.formatOnSave": true,
+		"editor.codeActionsOnSave": {
+			"source.fixAll": true
+		},
+	},
+	"[typescript]": {
+		"editor.formatOnSave": true,
+		"editor.codeActionsOnSave": {
+			"source.fixAll": true
+		},
+	},
+	"[json]": {
+		"editor.quickSuggestions": {
+			"strings": true
+		},
+		"editor.suggest.insertMode": "replace",
+		"editor.formatOnSave": true,
+		"editor.insertSpaces": true,
+		"editor.tabSize": 2
+	}
+}
