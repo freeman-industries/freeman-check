@@ -7,8 +7,6 @@ on:
 
 jobs:
   publish:
-    needs: test
-
     runs-on: ubuntu-latest
 
     steps:
@@ -23,6 +21,12 @@ jobs:
 
     - name: Install dependencies
       run: npm install
+
+    - name: Lint
+      run: npm run lint
+
+    - name: Run Tests
+      run: npm test
 
     - name: Bump package version
       run: npm version minor -m "Bump version to %s"

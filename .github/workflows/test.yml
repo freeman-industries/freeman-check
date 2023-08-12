@@ -1,9 +1,6 @@
 name: CI
 
 on:
-  push:
-    branches:
-      - master # or the name of your default branch
   pull_request:
     branches:
       - master # or the name of your default branch
