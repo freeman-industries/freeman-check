@@ -56,7 +56,8 @@ export class Check {
 					problem = 'is missing';
 					break;
 				case 'format':
-					problem = 'is malformatted';
+					subject = error.property.replace('instance.', '');
+					problem = `needs to be formatted as \`${error.argument}\``;
 					break;
 				case 'type':
 					subject = error.property.replace('instance.', '');
