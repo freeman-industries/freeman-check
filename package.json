@@ -4,6 +4,7 @@
   "description": "Easy type and format checking on JavaScript objects",
   "main": "src/index.ts",
   "scripts": {
+    "lint": "npx tsc --noEmit",
     "test": "mocha -r ts-node/register 'src/**/*.test.ts'"
   },
   "repository": {
