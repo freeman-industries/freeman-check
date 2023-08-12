@@ -1,0 +1,35 @@
+name: Publish Package to NPM
+
+on:
+  push:
+    branches:
+      - master # or your default branch name
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v2
+      with:
+        node-version: '16' # or your desired Node version
+        registry-url: 'https://registry.npmjs.org'
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Bump package version
+      run: npm version minor -m "Bump version to %s"
+
+    - name: Build
+      run: |
+        npm run build
+
+    - name: Publish
+      run: cd dist && npm publish
+      env:
+        NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
