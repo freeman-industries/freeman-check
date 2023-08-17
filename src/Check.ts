@@ -87,7 +87,7 @@ export class Check {
 		// remove last character from concatenated error message.
 		error_message = error_message.slice(0, -1);
 
-		const error = new CheckError(error_message, this.schema);
+		const error = new CheckError(error_message, this.schema, object);
 
 		throw error;
 	}
