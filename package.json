@@ -1,6 +1,6 @@
 {
   "name": "freeman-check",
-  "version": "3.0.3",
+  "version": "3.0.4",
   "description": "Easy type and format checking on JavaScript objects",
   "scripts": {
     "build": "bash ./build.sh",
