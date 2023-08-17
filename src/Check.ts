@@ -1,4 +1,3 @@
-import assert from 'assert';
 import { CheckError } from './CheckError';
 import { validate, Schema } from 'jsonschema';
 import anora from 'anora';
@@ -15,7 +14,7 @@ export class Check {
 	 * @throws {CheckError} Throws an error if the schema is not provided.
 	 */
 	constructor(schema: Schema) {
-		assert(schema, new CheckError(`Schema must be defined in constructor.`));
+		if (!schema) throw new CheckError(`Schema must be defined in constructor.`);
 
 		this.schema = schema;
 	}
@@ -30,7 +29,7 @@ export class Check {
 			throw new CheckError('The first argument is null or undefined.');
 		}
 
-		assert(this.schema, new CheckError(`test can't be called on Check instances initialized without a schema.`));
+		if (!this.schema) throw new CheckError(`test can't be called on Check instances initialized without a schema.`);
 
 		// validate.
 		const result = validate(object, this.schema);
@@ -72,10 +71,10 @@ export class Check {
 						type = error.schema.type;
 					}
 
-					assert(
-						type,
-						new CheckError(`Validation failed, and then there was an internal error while determining the required type of ${subject}.`)
-					);
+					if (!type)
+						throw new CheckError(
+							`Validation failed, and then there was an internal error while determining the required type of ${subject}.`
+						);
 
 					problem = 'needs to be ' + anora(type) + ' `' + type + '`';
 					break;
