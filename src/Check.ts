@@ -48,17 +48,20 @@ export class Check {
 
 			// assign plain English to error messages.
 			switch (error.name) {
-				case 'additionalProperties':
+				case 'additionalProperties': {
 					problem = 'is not allowed';
 					break;
-				case 'required':
+				}
+				case 'required': {
 					problem = 'is missing';
 					break;
-				case 'format':
+				}
+				case 'format': {
 					subject = error.property.replace('instance.', '');
 					problem = `needs to be formatted as \`${error.argument}\``;
 					break;
-				case 'type':
+				}
+				case 'type': {
 					subject = error.property.replace('instance.', '');
 
 					let type: string | undefined = undefined;
@@ -78,13 +81,15 @@ export class Check {
 
 					problem = 'needs to be ' + anora(type) + ' `' + type + '`';
 					break;
-				case 'enum':
+				}
+				case 'enum': {
 					subject = error.property.replace('instance.', '');
 
 					const requirement = error.argument.length === 1 ? 'needs to be' : 'needs to be one of';
 
 					problem = requirement + ' ' + error.argument.map(s => `"${s}"`).join(', ');
 					break;
+				}
 			}
 
 			// concatenate all validation errors.
