@@ -13,6 +13,7 @@ describe('Check class', () => {
 			favourite_films: { type: 'array', items: { type: 'string' } },
 			website: { type: 'string', format: 'uri' },
 			status: { type: 'string', enum: ['active', 'inactive', 'pending'] },
+			primary: { type: 'boolean', enum: [true] },
 		},
 		required: ['name', 'email', 'favourite_films'],
 	};
@@ -109,6 +110,16 @@ describe('Check class', () => {
 					status: 'unknown', // Incorrect enum value
 				};
 				expect(() => check(schema).test(object)).to.throw(CheckError, '`status` needs to be one of "active", "inactive", "pending".');
+			});
+
+			it('should show a slightly different message when it is a single value', () => {
+				const object = {
+					name,
+					email,
+					favourite_films,
+					primary: false, // Incorrect enum value
+				};
+				expect(() => check(schema).test(object)).to.throw(CheckError, '`primary` needs to be "true".');
 			});
 		});
 
