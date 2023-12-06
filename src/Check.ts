@@ -78,6 +78,10 @@ export class Check {
 
 					problem = 'needs to be ' + anora(type) + ' `' + type + '`';
 					break;
+				case 'enum':
+					subject = error.property.replace('instance.', '');
+					problem = 'needs to be one of ' + error.argument.map(s => `"${s}"`).join(', ');
+					break;
 			}
 
 			// concatenate all validation errors.

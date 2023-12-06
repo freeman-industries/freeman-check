@@ -108,7 +108,7 @@ describe('Check class', () => {
 					favourite_films,
 					status: 'unknown', // Incorrect enum value
 				};
-				expect(() => check(schema).test(object)).to.throw(CheckError, '`status` is incorrect.');
+				expect(() => check(schema).test(object)).to.throw(CheckError, '`status` needs to be one of "active", "inactive", "pending".');
 			});
 		});
 	});
