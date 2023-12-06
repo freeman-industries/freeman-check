@@ -111,5 +111,21 @@ describe('Check class', () => {
 				expect(() => check(schema).test(object)).to.throw(CheckError, '`status` needs to be one of "active", "inactive", "pending".');
 			});
 		});
+
+		describe('Multiple errors', () => {
+			it('should be able to return multiple errors joined together', () => {
+				const object = {
+					name,
+					email: 'invalid-email',
+					favourite_films: 'Transformers', // This should be an array
+					website: 'invalid-website',
+					status: 'unknown', // Incorrect enum value
+				};
+				expect(() => check(schema).test(object)).to.throw(
+					CheckError,
+					'`email` needs to be formatted as `email`. `favourite_films` needs to be an `array`. `website` needs to be formatted as `uri`. `status` needs to be one of "active", "inactive", "pending".'
+				);
+			});
+		});
 	});
 });
