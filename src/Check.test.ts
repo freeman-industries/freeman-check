@@ -12,6 +12,7 @@ describe('Check class', () => {
 			email: { type: 'string', format: 'email' },
 			favourite_films: { type: 'array', items: { type: 'string' } },
 			website: { type: 'string', format: 'uri' },
+			status: { type: 'string', enum: ['active', 'inactive', 'pending'] },
 		},
 		required: ['name', 'email', 'favourite_films'],
 	};
@@ -97,6 +98,18 @@ describe('Check class', () => {
 				favourite_films: 'Transformers', // This should be an array
 			};
 			expect(() => check(schema).test(object)).to.throw(CheckError, '`favourite_films` needs to be an `array`.');
+		});
+
+		describe('Enum check', () => {
+			it('should throw an error if object has incorrect enum value', () => {
+				const object = {
+					name,
+					email,
+					favourite_films,
+					status: 'unknown', // Incorrect enum value
+				};
+				expect(() => check(schema).test(object)).to.throw(CheckError, '`status` is incorrect.');
+			});
 		});
 	});
 });
