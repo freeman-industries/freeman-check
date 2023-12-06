@@ -80,7 +80,10 @@ export class Check {
 					break;
 				case 'enum':
 					subject = error.property.replace('instance.', '');
-					problem = 'needs to be one of ' + error.argument.map(s => `"${s}"`).join(', ');
+
+					const requirement = error.argument.length === 1 ? 'needs to be' : 'needs to be one of';
+
+					problem = requirement + ' ' + error.argument.map(s => `"${s}"`).join(', ');
 					break;
 			}
 
