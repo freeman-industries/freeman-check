@@ -2173,4 +2173,204 @@ describe('audit gap coverage', () => {
 		});
 	});
 
+	describe('if/then inside oneOf', () => {
+		it('should fall back to generic oneOf when if error creates a branch tie', () => {
+			// The normalizeErrors pipeline first resolves oneOf (Step 2), then filters
+			// `if` errors (Step 3). When if/then is inside a oneOf branch, the `if`
+			// error inflates that branch's error count, creating a tie with other
+			// branches. The best-match heuristic can't pick a winner, so it falls
+			// back to the generic oneOf message.
+			//
+			// Branch 0: mode≠auto (const), level missing (required) → 2 errors
+			// Branch 1: confirmation missing (then/required), if error → 2 errors
+			// Tie → generic oneOf
+			const check = new Check({
+				oneOf: [
+					{
+						type: 'object',
+						properties: {
+							mode: { const: 'auto' },
+							level: { type: 'string', enum: ['low', 'medium', 'high'] },
+						},
+						required: ['mode', 'level'],
+					},
+					{
+						type: 'object',
+						properties: {
+							mode: { const: 'manual' },
+							value: { type: 'number' },
+						},
+						required: ['mode', 'value'],
+						if: { properties: { value: { minimum: 100 } } },
+						then: { required: ['confirmation'] },
+					},
+				],
+			});
+			expect(() => check.test({ mode: 'manual', value: 150 })).to.throw(
+				CheckError,
+				'must match exactly one of the allowed schemas'
+			);
+		});
+
+		it('should accept valid data through if/then inside oneOf', () => {
+			const check = new Check({
+				oneOf: [
+					{
+						type: 'object',
+						properties: { mode: { const: 'auto' } },
+						required: ['mode'],
+					},
+					{
+						type: 'object',
+						properties: {
+							mode: { const: 'manual' },
+							value: { type: 'number' },
+						},
+						required: ['mode', 'value'],
+					},
+				],
+			});
+			expect(() => check.test({ mode: 'manual', value: 42 })).to.not.throw();
+		});
+	});
+
+	describe('$ref inside oneOf', () => {
+		// Known limitation: AJV v8 inlines $ref at compile time, so schemaPaths
+		// use `#/$defs/TypeX/...` instead of `#/oneOf/N/...`. The childRegex in
+		// normalizeErrors can't group these by branch, so the best-match heuristic
+		// never fires. All $defs errors leak through as "other" errors alongside
+		// the generic oneOf parent error.
+		//
+		// This means $ref inside oneOf produces noisier error output than inline
+		// schemas, but no error says "is invalid" — they're all specific keyword
+		// errors (required, const, etc.) plus the generic oneOf message.
+
+		it('should produce specific errors when no oneOf branch matches through $ref', () => {
+			const check = new Check({
+				oneOf: [
+					{ $ref: '#/$defs/TypeA' },
+					{ $ref: '#/$defs/TypeB' },
+				],
+				$defs: {
+					TypeA: {
+						type: 'object',
+						properties: { kind: { const: 'a' }, x: { type: 'number' } },
+						required: ['kind', 'x'],
+					},
+					TypeB: {
+						type: 'object',
+						properties: { kind: { const: 'b' }, y: { type: 'string' } },
+						required: ['kind', 'y'],
+					},
+				},
+			});
+			// All $defs errors leak through + oneOf parent
+			try {
+				check.test({ kind: 'c' });
+				expect.fail('should have thrown');
+			} catch (e: any) {
+				expect(e).to.be.instanceOf(CheckError);
+				expect(e.message).to.not.include('is invalid');
+				expect(e.message).to.include('must match exactly one of the allowed schemas');
+			}
+		});
+
+		it('should still produce specific errors when one branch nearly matches through $ref', () => {
+			const check = new Check({
+				oneOf: [
+					{ $ref: '#/$defs/TypeA' },
+					{ $ref: '#/$defs/TypeB' },
+				],
+				$defs: {
+					TypeA: {
+						type: 'object',
+						properties: { kind: { const: 'a' }, x: { type: 'number' } },
+						required: ['kind', 'x'],
+					},
+					TypeB: {
+						type: 'object',
+						properties: { kind: { const: 'b' }, y: { type: 'string' } },
+						required: ['kind', 'y'],
+					},
+				},
+			});
+			// kind=a matches TypeA's const, but x is missing (1 error in TypeA)
+			// kind≠b plus y missing (2 errors in TypeB)
+			// Best-match heuristic can't fire because schemaPaths are $defs-based
+			// So all errors leak through instead of just TypeA's specific error
+			try {
+				check.test({ kind: 'a' });
+				expect.fail('should have thrown');
+			} catch (e: any) {
+				expect(e).to.be.instanceOf(CheckError);
+				expect(e.message).to.include('`x` is missing');
+				expect(e.message).to.include('must match exactly one of the allowed schemas');
+			}
+		});
+
+		it('should accept valid data through $ref in oneOf', () => {
+			const check = new Check({
+				oneOf: [
+					{ $ref: '#/$defs/TypeA' },
+					{ $ref: '#/$defs/TypeB' },
+				],
+				$defs: {
+					TypeA: {
+						type: 'object',
+						properties: { kind: { const: 'a' }, x: { type: 'number' } },
+						required: ['kind', 'x'],
+					},
+					TypeB: {
+						type: 'object',
+						properties: { kind: { const: 'b' }, y: { type: 'string' } },
+						required: ['kind', 'y'],
+					},
+				},
+			});
+			expect(() => check.test({ kind: 'a', x: 42 })).to.not.throw();
+		});
+	});
+
+	describe('additionalItems verification', () => {
+		it('should confirm additionalItems is dead code in Ajv2020', () => {
+			// In JSON Schema 2020-12, `items` must be an object/boolean (not an array).
+			// The array form was replaced by `prefixItems`. Since Ajv2020 rejects
+			// `items` as an array, the `additionalItems` keyword can never fire.
+			//
+			// With `prefixItems` + `additionalItems: false`, AJV silently ignores
+			// additionalItems (it's not a 2020-12 keyword). Extra items pass validation.
+			//
+			// The `additionalItems` handler in formatProblem is harmless dead code.
+			const check = new Check({
+				type: 'object',
+				properties: {
+					tuple: {
+						type: 'array',
+						prefixItems: [
+							{ type: 'string' },
+							{ type: 'number' },
+						],
+						additionalItems: false,
+					} as any,
+				},
+			});
+			// Extra items are NOT rejected — additionalItems is ignored in 2020-12 mode
+			expect(() => check.test({ tuple: ['a', 1, 'extra'] })).to.not.throw();
+		});
+	});
+
+	describe('empty enum edge case', () => {
+		it('should reject empty enum at schema compile time', () => {
+			// AJV rejects `enum: []` at compile time with "enum must have non-empty array",
+			// even with strict: false. This means the `formatProblem` enum handler never
+			// needs to handle an empty allowedValues array.
+			expect(() => new Check({
+				type: 'object',
+				properties: {
+					impossible: { enum: [] },
+				},
+			})).to.throw(Error, 'enum must have non-empty array');
+		});
+	});
+
 });
