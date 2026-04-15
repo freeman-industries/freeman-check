@@ -10,6 +10,7 @@ function convertPath(instancePath: string): string {
 	return instancePath
 		.slice(1)                       // Remove leading /
 		.replace(/\/(\d+)/g, '[$1]')    // Convert /0 to [0] (array indices)
+		.replace(/^(\d+)/, '[$1]')      // Convert leading digit to [0] (root array index)
 		.replace(/\//g, '.');            // Convert remaining / to . (object keys)
 }
 
