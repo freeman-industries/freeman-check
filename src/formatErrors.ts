@@ -227,6 +227,70 @@ function formatProblem(error: ErrorObject): string {
 }
 
 /**
+ * Escapes special regex characters in a string.
+ */
+function escapeRegex(str: string): string {
+	return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * For a given oneOf/anyOf parent error, groups child errors by subschema
+ * branch index and returns errors from the branch with the fewest failures.
+ *
+ * Returns the "best match" branch's errors if one branch has strictly fewer
+ * errors than all others, or null if there's a tie (ambiguous).
+ *
+ * For oneOf with passingSchemas !== null (multiple schemas matched), returns
+ * null immediately — the problem is "too many matched" and branch errors
+ * are irrelevant.
+ */
+function findBestBranchErrors(
+	parentError: ErrorObject,
+	childErrors: ErrorObject[]
+): ErrorObject[] | null {
+	// For oneOf with multiple passing schemas, can't improve on generic message
+	if (parentError.keyword === 'oneOf') {
+		const params = parentError.params as { passingSchemas: number[] | null };
+		if (params.passingSchemas !== null) {
+			return null;
+		}
+	}
+
+	const parentSchemaPath = parentError.schemaPath;
+
+	// Group child errors by branch index under this parent
+	// Parent schemaPath: '#/oneOf' or '#/properties/value/anyOf'
+	// Child schemaPath:  '#/oneOf/0/properties/type/const' → branch 0
+	const branchPattern = new RegExp(escapeRegex(parentSchemaPath) + '/(\\d+)/');
+	const branches = new Map<number, ErrorObject[]>();
+
+	for (const child of childErrors) {
+		const match = child.schemaPath.match(branchPattern);
+		if (!match || !match[1]) continue;
+		const index = parseInt(match[1], 10);
+		if (!branches.has(index)) branches.set(index, []);
+		branches.get(index)!.push(child);
+	}
+
+	// Need at least 2 branches with errors to compare
+	if (branches.size < 2) return null;
+
+	// Sort branches by error count (ascending)
+	const sorted = [...branches.values()].sort((a, b) => a.length - b.length);
+
+	const first = sorted[0];
+	const second = sorted[1];
+
+	// Clear winner: strictly fewer errors than the next best
+	if (first && second && first.length < second.length) {
+		return first;
+	}
+
+	// Tie — no clear winner
+	return null;
+}
+
+/**
  * Filters, maps, and deduplicates AJV errors into field/problem tuples.
  *
  * - Filters out child errors from oneOf/anyOf compounds (unless discriminator is present)
@@ -241,13 +305,36 @@ function normalizeErrors(errors: ErrorObject[]): Array<{ field: string; problem:
 
 	let filtered = errors;
 
-	// Step 2: Filter oneOf/anyOf child errors (unless discriminator present)
+	// Step 2: Resolve oneOf/anyOf errors (unless discriminator present)
+	// When no discriminator, attempt to find the "best matching" subschema branch
+	// (the one with fewest errors). If found, surface that branch's specific errors
+	// instead of the generic oneOf/anyOf parent message.
 	if ((hasOneOfError || hasAnyOfError) && !hasDiscriminator) {
-		filtered = errors.filter((e) => {
-			if (e.keyword === 'oneOf' || e.keyword === 'anyOf') return true;
-			if (/\/(oneOf|anyOf)\/\d+\//.test(e.schemaPath)) return false;
-			return true;
-		});
+		const childRegex = /\/(oneOf|anyOf)\/\d+\//;
+		const parentErrors = errors.filter(
+			(e) => e.keyword === 'oneOf' || e.keyword === 'anyOf'
+		);
+		const childErrors = errors.filter(
+			(e) => e.keyword !== 'oneOf' && e.keyword !== 'anyOf' && childRegex.test(e.schemaPath)
+		);
+		const otherErrors = errors.filter(
+			(e) => e.keyword !== 'oneOf' && e.keyword !== 'anyOf' && !childRegex.test(e.schemaPath)
+		);
+
+		const resolved: ErrorObject[] = [...otherErrors];
+
+		for (const parent of parentErrors) {
+			const bestBranch = findBestBranchErrors(parent, childErrors);
+			if (bestBranch) {
+				// Clear winner found — use specific branch errors
+				resolved.push(...bestBranch);
+			} else {
+				// Tie or can't determine — fall back to generic parent error
+				resolved.push(parent);
+			}
+		}
+
+		filtered = resolved;
 	}
 
 	// Step 3: Filter generic `if` errors when specific then/else errors exist

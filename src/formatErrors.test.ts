@@ -470,6 +470,120 @@ describe('normalizeErrors', () => {
 		});
 	});
 
+	describe('oneOf/anyOf best-match heuristic', () => {
+		it('should show errors from the branch with fewer errors when there is a clear winner', () => {
+			const errors = [
+				// Branch 0: 1 error (missing x)
+				mockError({ keyword: 'required', instancePath: '', schemaPath: '#/oneOf/0/required', params: { missingProperty: 'x' } }),
+				// Branch 1: 2 errors (wrong type const + missing y)
+				mockError({ keyword: 'const', instancePath: '/type', schemaPath: '#/oneOf/1/properties/type/const', params: { allowedValue: 'b' } }),
+				mockError({ keyword: 'required', instancePath: '', schemaPath: '#/oneOf/1/required', params: { missingProperty: 'y' } }),
+				// Parent
+				mockError({ keyword: 'oneOf', instancePath: '', schemaPath: '#/oneOf', params: { passingSchemas: null } }),
+			];
+			const result = normalizeErrors(errors);
+			expect(result).to.have.length(1);
+			expect(result[0]!.field).to.equal('x');
+			expect(result[0]!.problem).to.equal('is missing');
+		});
+
+		it('should fall back to generic message when branches have equal error counts', () => {
+			const errors = [
+				// Branch 0: 1 error
+				mockError({ keyword: 'const', instancePath: '/type', schemaPath: '#/oneOf/0/properties/type/const', params: { allowedValue: 'a' } }),
+				// Branch 1: 1 error
+				mockError({ keyword: 'const', instancePath: '/type', schemaPath: '#/oneOf/1/properties/type/const', params: { allowedValue: 'b' } }),
+				// Parent
+				mockError({ keyword: 'oneOf', instancePath: '', schemaPath: '#/oneOf', params: { passingSchemas: null } }),
+			];
+			const result = normalizeErrors(errors);
+			expect(result).to.have.length(1);
+			expect(result[0]!.field).to.equal('value');
+			expect(result[0]!.problem).to.equal('must match exactly one of the allowed schemas');
+		});
+
+		it('should show all errors from the winning branch when it has multiple errors', () => {
+			const errors = [
+				// Branch 0: 2 errors (type + missing field)
+				mockError({ keyword: 'type', instancePath: '/x', schemaPath: '#/oneOf/0/properties/x/type', params: { type: 'number' } }),
+				mockError({ keyword: 'required', instancePath: '', schemaPath: '#/oneOf/0/required', params: { missingProperty: 'z' } }),
+				// Branch 1: 4 errors
+				mockError({ keyword: 'const', instancePath: '/type', schemaPath: '#/oneOf/1/properties/type/const', params: { allowedValue: 'b' } }),
+				mockError({ keyword: 'required', instancePath: '', schemaPath: '#/oneOf/1/required', params: { missingProperty: 'a' } }),
+				mockError({ keyword: 'required', instancePath: '', schemaPath: '#/oneOf/1/required', params: { missingProperty: 'b' } }),
+				mockError({ keyword: 'type', instancePath: '/x', schemaPath: '#/oneOf/1/properties/x/type', params: { type: 'string' } }),
+				// Parent
+				mockError({ keyword: 'oneOf', instancePath: '', schemaPath: '#/oneOf', params: { passingSchemas: null } }),
+			];
+			const result = normalizeErrors(errors);
+			expect(result).to.have.length(2);
+			expect(result[0]!.field).to.equal('x');
+			expect(result[0]!.problem).to.equal('needs to be a `number`');
+			expect(result[1]!.field).to.equal('z');
+			expect(result[1]!.problem).to.equal('is missing');
+		});
+
+		it('should fall back to generic for oneOf when multiple schemas match (passingSchemas is not null)', () => {
+			const errors = [
+				mockError({ keyword: 'oneOf', instancePath: '', schemaPath: '#/oneOf', params: { passingSchemas: [0, 1] } }),
+			];
+			const result = normalizeErrors(errors);
+			expect(result).to.have.length(1);
+			expect(result[0]!.problem).to.equal('must match exactly one of the allowed schemas');
+		});
+
+		it('should apply best-match for anyOf with a clear winner', () => {
+			const errors = [
+				// Branch 0: 1 error (format)
+				mockError({ keyword: 'format', instancePath: '/email', schemaPath: '#/anyOf/0/properties/email/format', params: { format: 'email' } }),
+				// Branch 1: 3 errors
+				mockError({ keyword: 'required', instancePath: '', schemaPath: '#/anyOf/1/required', params: { missingProperty: 'phone' } }),
+				mockError({ keyword: 'type', instancePath: '/name', schemaPath: '#/anyOf/1/properties/name/type', params: { type: 'number' } }),
+				mockError({ keyword: 'required', instancePath: '', schemaPath: '#/anyOf/1/required', params: { missingProperty: 'code' } }),
+				// Parent
+				mockError({ keyword: 'anyOf', instancePath: '', schemaPath: '#/anyOf', params: {} }),
+			];
+			const result = normalizeErrors(errors);
+			expect(result).to.have.length(1);
+			expect(result[0]!.field).to.equal('email');
+			expect(result[0]!.problem).to.equal('needs to be formatted as `email`');
+		});
+
+		it('should preserve non-oneOf/anyOf errors alongside best-match results', () => {
+			const errors = [
+				// Non-compound error at root level
+				mockError({ keyword: 'required', instancePath: '', schemaPath: '#/required', params: { missingProperty: 'name' } }),
+				// Branch 0: 1 error
+				mockError({ keyword: 'required', instancePath: '', schemaPath: '#/oneOf/0/required', params: { missingProperty: 'x' } }),
+				// Branch 1: 3 errors
+				mockError({ keyword: 'const', instancePath: '/mode', schemaPath: '#/oneOf/1/properties/mode/const', params: { allowedValue: 'b' } }),
+				mockError({ keyword: 'required', instancePath: '', schemaPath: '#/oneOf/1/required', params: { missingProperty: 'y' } }),
+				mockError({ keyword: 'required', instancePath: '', schemaPath: '#/oneOf/1/required', params: { missingProperty: 'z' } }),
+				// Parent
+				mockError({ keyword: 'oneOf', instancePath: '', schemaPath: '#/oneOf', params: { passingSchemas: null } }),
+			];
+			const result = normalizeErrors(errors);
+			expect(result).to.have.length(2);
+			expect(result[0]!.field).to.equal('name');
+			expect(result[0]!.problem).to.equal('is missing');
+			expect(result[1]!.field).to.equal('x');
+			expect(result[1]!.problem).to.equal('is missing');
+		});
+
+		it('should fall back to generic when only one branch has errors', () => {
+			const errors = [
+				// Only branch 0 has errors — branch 1 has none (unusual but handle gracefully)
+				mockError({ keyword: 'const', instancePath: '/type', schemaPath: '#/oneOf/0/properties/type/const', params: { allowedValue: 'a' } }),
+				// Parent
+				mockError({ keyword: 'oneOf', instancePath: '', schemaPath: '#/oneOf', params: { passingSchemas: null } }),
+			];
+			const result = normalizeErrors(errors);
+			expect(result).to.have.length(1);
+			expect(result[0]!.field).to.equal('value');
+			expect(result[0]!.problem).to.equal('must match exactly one of the allowed schemas');
+		});
+	});
+
 	describe('if/then/else filtering', () => {
 		it('should filter out generic if error when then/else errors exist', () => {
 			const errors = [
