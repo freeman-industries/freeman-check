@@ -1,4 +1,4 @@
-import { Schema } from 'jsonschema';
+import type { SchemaObject as Schema } from 'ajv';
 
 /**
  * Custom error class representing a validation error for a specific schema.

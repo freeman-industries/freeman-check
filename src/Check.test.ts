@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { Check } from './Check';
 import { CheckError } from './CheckError';
-import { Schema } from 'jsonschema';
+import { Schema } from './index';
 
 describe('Check class', () => {
 	// Schema for testing
