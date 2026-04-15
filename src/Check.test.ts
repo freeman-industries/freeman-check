@@ -895,6 +895,69 @@ describe('new keyword handling — structural and compound', () => {
 			});
 			expect(() => check.test({ type: 'a' })).to.not.throw();
 		});
+
+		it('should show specific errors when one subschema is closest to matching', () => {
+			const check = new Check({
+				oneOf: [
+					{
+						type: 'object',
+						properties: { type: { const: 'a' }, x: { type: 'number' } },
+						required: ['type', 'x'],
+					},
+					{
+						type: 'object',
+						properties: { type: { const: 'b' }, y: { type: 'number' } },
+						required: ['type', 'y'],
+					},
+				],
+			});
+			// Branch 0: type matches 'a', but x is missing → 1 error
+			// Branch 1: type doesn't match 'b', and y is missing → 2+ errors
+			// Best match: Branch 0 → shows specific error
+			expect(() => check.test({ type: 'a' })).to.throw(CheckError, '`x` is missing.');
+		});
+
+		it('should show specific errors for the other branch when it is closest', () => {
+			const check = new Check({
+				oneOf: [
+					{
+						type: 'object',
+						properties: { type: { const: 'a' }, x: { type: 'number' } },
+						required: ['type', 'x'],
+					},
+					{
+						type: 'object',
+						properties: { type: { const: 'b' }, y: { type: 'number' } },
+						required: ['type', 'y'],
+					},
+				],
+			});
+			// Branch 0: type doesn't match 'a', and x is missing → 2+ errors
+			// Branch 1: type matches 'b', but y is missing → 1 error
+			// Best match: Branch 1 → shows specific error
+			expect(() => check.test({ type: 'b' })).to.throw(CheckError, '`y` is missing.');
+		});
+
+		it('should show type errors from the closest matching subschema', () => {
+			const check = new Check({
+				oneOf: [
+					{
+						type: 'object',
+						properties: { type: { const: 'a' }, x: { type: 'number' } },
+						required: ['type', 'x'],
+					},
+					{
+						type: 'object',
+						properties: { type: { const: 'b' }, y: { type: 'number' } },
+						required: ['type', 'y'],
+					},
+				],
+			});
+			// Branch 0: type matches 'a', x is present but wrong type → 1 error
+			// Branch 1: type doesn't match 'b', y is missing → 2+ errors
+			// Best match: Branch 0 → shows specific error
+			expect(() => check.test({ type: 'a', x: 'not-a-number' })).to.throw(CheckError, '`x` needs to be a `number`.');
+		});
 	});
 
 	describe('anyOf', () => {
@@ -926,6 +989,48 @@ describe('new keyword handling — structural and compound', () => {
 				},
 			});
 			expect(() => check.test({ value: 'hello' })).to.not.throw();
+		});
+
+		it('should show specific errors when one anyOf subschema is closest to matching', () => {
+			const check = new Check({
+				anyOf: [
+					{
+						type: 'object',
+						properties: { mode: { const: 'auto' }, threshold: { type: 'number' } },
+						required: ['mode', 'threshold'],
+					},
+					{
+						type: 'object',
+						properties: { mode: { const: 'manual' }, value: { type: 'number' }, unit: { type: 'string' } },
+						required: ['mode', 'value', 'unit'],
+					},
+				],
+			});
+			// Branch 0: mode matches 'auto', threshold is missing → 1 error
+			// Branch 1: mode doesn't match 'manual', value and unit missing → 3 errors
+			// Best match: Branch 0 → shows specific error
+			expect(() => check.test({ mode: 'auto' })).to.throw(CheckError, '`threshold` is missing.');
+		});
+
+		it('should show specific errors for the other anyOf branch when it is closest', () => {
+			const check = new Check({
+				anyOf: [
+					{
+						type: 'object',
+						properties: { mode: { const: 'auto' }, threshold: { type: 'number' } },
+						required: ['mode', 'threshold'],
+					},
+					{
+						type: 'object',
+						properties: { mode: { const: 'manual' }, value: { type: 'number' }, unit: { type: 'string' } },
+						required: ['mode', 'value', 'unit'],
+					},
+				],
+			});
+			// Branch 0: mode doesn't match 'auto', threshold missing → 2 errors
+			// Branch 1: mode matches 'manual', value and unit missing → 2 errors
+			// Tie → generic message
+			expect(() => check.test({ mode: 'manual' })).to.throw(CheckError, '`value` must match at least one of the allowed schemas.');
 		});
 	});
 
