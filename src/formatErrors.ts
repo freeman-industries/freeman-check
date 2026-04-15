@@ -75,11 +75,17 @@ function formatProblem(error: ErrorObject): string {
 		}
 
 		case 'type': {
-			const typeParam = (error.params as { type: string }).type;
+			const typeParam = (error.params as { type: string | string[] }).type;
 
-			// AJV uses comma-separated types for unions: "string,null"
-			if (typeParam.includes(',')) {
-				const types = typeParam.split(',');
+			// AJV provides an array for union types like type: ["string", "null"]
+			// and a comma-separated string in some contexts
+			const types = Array.isArray(typeParam)
+				? typeParam
+				: typeof typeParam === 'string' && typeParam.includes(',')
+					? typeParam.split(',')
+					: null;
+
+			if (types && types.length > 1) {
 				const formatted = types.map((t, i) => {
 					const article = i === 0 ? anora(t) + ' ' : '';
 					// Only add article for non-null types after the first
@@ -91,7 +97,8 @@ function formatProblem(error: ErrorObject): string {
 				return `needs to be ${formatted.join(' or ')}`;
 			}
 
-			return `needs to be ${anora(typeParam)} \`${typeParam}\``;
+			const singleType = Array.isArray(typeParam) ? typeParam[0] : typeParam;
+			return `needs to be ${anora(singleType)} \`${singleType}\``;
 		}
 
 		case 'enum': {

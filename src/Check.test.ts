@@ -1245,3 +1245,492 @@ describe('new keyword handling — structural and compound', () => {
 		});
 	});
 });
+
+describe('edge cases and complex scenarios', () => {
+
+	describe('deeply nested objects', () => {
+		it('should handle 3-level deep required field', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					level1: {
+						type: 'object',
+						properties: {
+							level2: {
+								type: 'object',
+								properties: {
+									level3: {
+										type: 'object',
+										properties: { value: { type: 'string' } },
+										required: ['value'],
+									},
+								},
+								required: ['level3'],
+							},
+						},
+						required: ['level2'],
+					},
+				},
+				required: ['level1'],
+			});
+			expect(() => check.test({ level1: { level2: { level3: {} } } })).to.throw(CheckError, '`level1.level2.level3.value` is missing.');
+		});
+
+		it('should handle 3-level deep type error', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					a: {
+						type: 'object',
+						properties: {
+							b: {
+								type: 'object',
+								properties: {
+									c: { type: 'number' },
+								},
+							},
+						},
+					},
+				},
+			});
+			expect(() => check.test({ a: { b: { c: 'wrong' } } })).to.throw(CheckError, '`a.b.c` needs to be a `number`.');
+		});
+
+		it('should handle deeply nested enum error', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					config: {
+						type: 'object',
+						properties: {
+							settings: {
+								type: 'object',
+								properties: {
+									mode: { type: 'string', enum: ['fast', 'slow'] },
+								},
+							},
+						},
+					},
+				},
+			});
+			expect(() => check.test({ config: { settings: { mode: 'medium' } } })).to.throw(CheckError, '`config.settings.mode` needs to be one of "fast", "slow".');
+		});
+	});
+
+	describe('arrays of objects', () => {
+		it('should validate properties on array item objects', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					users: {
+						type: 'array',
+						items: {
+							type: 'object',
+							properties: {
+								name: { type: 'string' },
+								age: { type: 'integer', minimum: 0 },
+							},
+							required: ['name'],
+						},
+					},
+				},
+			});
+			expect(() => check.test({ users: [{ age: 25 }] })).to.throw(CheckError, '`users[0].name` is missing.');
+		});
+
+		it('should report type errors in array item properties', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					items: {
+						type: 'array',
+						items: {
+							type: 'object',
+							properties: {
+								price: { type: 'number' },
+								label: { type: 'string' },
+							},
+						},
+					},
+				},
+			});
+			expect(() => check.test({ items: [{ price: 'free', label: 123 }] })).to.throw(CheckError);
+			// Should contain both type errors for items[0].price and items[0].label
+		});
+
+		it('should handle multiple array items with different errors', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					entries: {
+						type: 'array',
+						items: {
+							type: 'object',
+							properties: { status: { type: 'string', enum: ['active', 'inactive'] } },
+							required: ['status'],
+						},
+					},
+				},
+			});
+			expect(() => check.test({ entries: [{ status: 'active' }, {}, { status: 'bad' }] })).to.throw(CheckError);
+			// Should contain errors for entries[1].status missing and entries[2].status enum
+		});
+	});
+
+	describe('union types', () => {
+		it('should handle type: ["string", "null"] — reject non-matching', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { name: { type: ['string', 'null'] } },
+			});
+			expect(() => check.test({ name: 123 })).to.throw(CheckError, '`name` needs to be a `string` or `null`.');
+		});
+
+		it('should handle type: ["string", "null"] — accept string', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { name: { type: ['string', 'null'] } },
+			});
+			expect(() => check.test({ name: 'hello' })).to.not.throw();
+		});
+
+		it('should handle type: ["string", "null"] — accept null', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { name: { type: ['string', 'null'] } },
+			});
+			expect(() => check.test({ name: null })).to.not.throw();
+		});
+
+		it('should handle type: ["number", "null"]', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { count: { type: ['number', 'null'] } },
+			});
+			expect(() => check.test({ count: 'text' })).to.throw(CheckError, '`count` needs to be a `number` or `null`.');
+		});
+
+		it('should handle type: ["array", "null"]', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { tags: { type: ['array', 'null'] } },
+			});
+			expect(() => check.test({ tags: 'not-array' })).to.throw(CheckError, '`tags` needs to be an `array` or `null`.');
+		});
+
+		it('should handle type: ["string", "number"]', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { value: { type: ['string', 'number'] } },
+			});
+			expect(() => check.test({ value: true })).to.throw(CheckError, '`value` needs to be a `string` or a `number`.');
+		});
+	});
+
+	describe('multi-error ordering', () => {
+		it('should report errors for multiple fields', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					email: { type: 'string', format: 'email' },
+					age: { type: 'integer', minimum: 0 },
+					status: { type: 'string', enum: ['active', 'inactive'] },
+				},
+			});
+			expect(() => check.test({ email: 'bad', age: -1, status: 'unknown' })).to.throw(CheckError);
+			// Should contain all three error messages
+		});
+
+		it('should handle required and type errors together', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					name: { type: 'string' },
+					email: { type: 'string' },
+				},
+				required: ['name', 'email'],
+			});
+			expect(() => check.test({ name: 123 })).to.throw(CheckError);
+			// Should contain `name` type error and `email` missing error
+		});
+	});
+
+	describe('complex combined schemas', () => {
+		it('should handle object with required + additionalProperties + type + enum + format', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					name: { type: 'string', minLength: 1 },
+					email: { type: 'string', format: 'email' },
+					role: { type: 'string', enum: ['admin', 'user'] },
+					age: { type: 'integer', minimum: 18, maximum: 120 },
+				},
+				required: ['name', 'email', 'role', 'age'],
+				additionalProperties: false,
+			});
+			// Valid data should pass
+			expect(() => check.test({ name: 'Alice', email: 'alice@example.com', role: 'admin', age: 30 })).to.not.throw();
+		});
+
+		it('should report multiple different constraint violations in one object', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					name: { type: 'string', minLength: 1 },
+					email: { type: 'string', format: 'email' },
+					role: { type: 'string', enum: ['admin', 'user'] },
+					age: { type: 'integer', minimum: 18, maximum: 120 },
+				},
+				required: ['name', 'email', 'role', 'age'],
+				additionalProperties: false,
+			});
+			expect(() => check.test({ name: '', email: 'bad', role: 'superadmin', age: 10, extra: true })).to.throw(CheckError);
+			// Should contain errors for: name minLength, email format, role enum, age minimum, extra not allowed
+		});
+	});
+
+	describe('root-level validation failures', () => {
+		it('should handle non-object passed to object schema', () => {
+			const check = new Check({ type: 'object' });
+			expect(() => check.test('not an object')).to.throw(CheckError, '`value` needs to be an `object`.');
+		});
+
+		it('should handle number passed to object schema', () => {
+			const check = new Check({ type: 'object' });
+			expect(() => check.test(42)).to.throw(CheckError, '`value` needs to be an `object`.');
+		});
+
+		it('should handle array passed to object schema', () => {
+			const check = new Check({ type: 'object' });
+			expect(() => check.test([1, 2, 3])).to.throw(CheckError, '`value` needs to be an `object`.');
+		});
+
+		it('should handle boolean passed to object schema', () => {
+			const check = new Check({ type: 'object' });
+			expect(() => check.test(true)).to.throw(CheckError, '`value` needs to be an `object`.');
+		});
+	});
+
+	describe('empty objects and arrays', () => {
+		it('should accept empty object when no required fields', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { name: { type: 'string' } },
+			});
+			expect(() => check.test({})).to.not.throw();
+		});
+
+		it('should accept empty array when no minItems', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { tags: { type: 'array', items: { type: 'string' } } },
+			});
+			expect(() => check.test({ tags: [] })).to.not.throw();
+		});
+
+		it('should reject empty object when required fields exist', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { name: { type: 'string' } },
+				required: ['name'],
+			});
+			expect(() => check.test({})).to.throw(CheckError, '`name` is missing.');
+		});
+	});
+
+	describe('large enum lists', () => {
+		it('should format a large enum list (10+ values)', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					country: {
+						type: 'string',
+						enum: ['US', 'UK', 'CA', 'AU', 'DE', 'FR', 'JP', 'KR', 'BR', 'MX', 'IN'],
+					},
+				},
+			});
+			expect(() => check.test({ country: 'ZZ' })).to.throw(CheckError, '`country` needs to be one of "US", "UK", "CA", "AU", "DE", "FR", "JP", "KR", "BR", "MX", "IN".');
+		});
+	});
+
+	describe('discriminated unions with matched subschema errors', () => {
+		it('should report specific field errors from the matched subschema', () => {
+			const check = new Check({
+				type: 'object',
+				discriminator: { propertyName: 'kind' },
+				required: ['kind'],
+				oneOf: [
+					{
+						type: 'object',
+						properties: {
+							kind: { const: 'circle' },
+							radius: { type: 'number', minimum: 0 },
+						},
+						required: ['kind', 'radius'],
+					},
+					{
+						type: 'object',
+						properties: {
+							kind: { const: 'rectangle' },
+							width: { type: 'number', minimum: 0 },
+							height: { type: 'number', minimum: 0 },
+						},
+						required: ['kind', 'width', 'height'],
+					},
+				],
+			});
+			expect(() => check.test({ kind: 'circle' })).to.throw(CheckError, '`radius` is missing.');
+		});
+
+		it('should report constraint errors from the matched subschema', () => {
+			const check = new Check({
+				type: 'object',
+				discriminator: { propertyName: 'kind' },
+				required: ['kind'],
+				oneOf: [
+					{
+						type: 'object',
+						properties: {
+							kind: { const: 'circle' },
+							radius: { type: 'number', minimum: 0 },
+						},
+						required: ['kind', 'radius'],
+					},
+					{
+						type: 'object',
+						properties: {
+							kind: { const: 'rectangle' },
+							width: { type: 'number', minimum: 0 },
+							height: { type: 'number', minimum: 0 },
+						},
+						required: ['kind', 'width', 'height'],
+					},
+				],
+			});
+			expect(() => check.test({ kind: 'circle', radius: -5 })).to.throw(CheckError, '`radius` needs to be at least 0.');
+		});
+	});
+
+	describe('multiple array items failing', () => {
+		it('should report errors for items[0] and items[2] when both fail type check', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					scores: {
+						type: 'array',
+						items: { type: 'number' },
+					},
+				},
+			});
+			expect(() => check.test({ scores: ['bad', 10, 'worse'] })).to.throw(CheckError);
+			// Should contain errors for scores[0] and scores[2]
+		});
+
+		it('should handle multiple items failing different constraints', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					values: {
+						type: 'array',
+						items: { type: 'integer', minimum: 0, maximum: 100 },
+					},
+				},
+			});
+			expect(() => check.test({ values: [-5, 50, 200] })).to.throw(CheckError);
+			// Should contain errors for values[0] minimum and values[2] maximum
+		});
+	});
+
+	describe('nested arrays', () => {
+		it('should handle array of arrays with item validation', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					matrix: {
+						type: 'array',
+						items: {
+							type: 'array',
+							items: { type: 'number' },
+						},
+					},
+				},
+			});
+			expect(() => check.test({ matrix: [[1, 2], ['bad']] })).to.throw(CheckError, '`matrix[1][0]` needs to be a `number`.');
+		});
+
+		it('should handle nested array with minItems', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					groups: {
+						type: 'array',
+						items: {
+							type: 'array',
+							items: { type: 'string' },
+							minItems: 1,
+						},
+					},
+				},
+			});
+			expect(() => check.test({ groups: [['a', 'b'], []] })).to.throw(CheckError, '`groups[1]` needs to have at least 1 item.');
+		});
+	});
+
+	describe('valid data passthrough', () => {
+		it('should not throw for a complex valid object', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					name: { type: 'string', minLength: 1 },
+					email: { type: 'string', format: 'email' },
+					age: { type: 'integer', minimum: 0, maximum: 150 },
+					tags: { type: 'array', items: { type: 'string' }, minItems: 1, uniqueItems: true },
+					address: {
+						type: 'object',
+						properties: {
+							street: { type: 'string' },
+							city: { type: 'string' },
+						},
+						required: ['street', 'city'],
+					},
+				},
+				required: ['name', 'email', 'age', 'tags', 'address'],
+				additionalProperties: false,
+			});
+			expect(() => check.test({
+				name: 'Alice',
+				email: 'alice@example.com',
+				age: 30,
+				tags: ['developer'],
+				address: { street: '123 Main St', city: 'Anytown' },
+			})).to.not.throw();
+		});
+
+		it('should not throw for a minimal valid object', () => {
+			const check = new Check({ type: 'object' });
+			expect(() => check.test({})).to.not.throw();
+		});
+	});
+
+	describe('boolean schema values', () => {
+		it('should reject any value with false schema on a property', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					forbidden: false as any,
+				},
+			});
+			expect(() => check.test({ forbidden: 'anything' })).to.throw(CheckError, '`forbidden` is not allowed.');
+		});
+
+		it('should accept any value with true schema on a property', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					anything: true as any,
+				},
+			});
+			expect(() => check.test({ anything: 'whatever' })).to.not.throw();
+		});
+	});
+});
