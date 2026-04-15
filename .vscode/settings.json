@@ -16,13 +16,13 @@
 	"[javascript]": {
 		"editor.formatOnSave": true,
 		"editor.codeActionsOnSave": {
-			"source.fixAll": true
+			"source.fixAll": "explicit"
 		},
 	},
 	"[typescript]": {
 		"editor.formatOnSave": true,
 		"editor.codeActionsOnSave": {
-			"source.fixAll": true
+			"source.fixAll": "explicit"
 		},
 	},
 	"[json]": {
