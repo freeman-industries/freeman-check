@@ -235,6 +235,26 @@ describe('formatProblem', () => {
 				const error = mockError({ keyword: 'type', params: { type: 'string,number' } });
 				expect(formatProblem(error)).to.equal('needs to be a `string` or a `number`');
 			});
+
+			it('should format 3-type union with Oxford comma', () => {
+				const error = mockError({ keyword: 'type', params: { type: 'string,number,null' } });
+				expect(formatProblem(error)).to.equal('needs to be a `string`, a `number`, or `null`');
+			});
+
+			it('should format 3-type union with array params', () => {
+				const error = mockError({ keyword: 'type', params: { type: ['string', 'number', 'null'] } });
+				expect(formatProblem(error)).to.equal('needs to be a `string`, a `number`, or `null`');
+			});
+
+			it('should format 4-type union with Oxford comma', () => {
+				const error = mockError({ keyword: 'type', params: { type: ['string', 'number', 'boolean', 'null'] } });
+				expect(formatProblem(error)).to.equal('needs to be a `string`, a `number`, a `boolean`, or `null`');
+			});
+
+			it('should format 3-type union without null', () => {
+				const error = mockError({ keyword: 'type', params: { type: ['string', 'number', 'integer'] } });
+				expect(formatProblem(error)).to.equal('needs to be a `string`, a `number`, or an `integer`');
+			});
 		});
 
 		describe('enum keyword', () => {

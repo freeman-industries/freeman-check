@@ -105,7 +105,16 @@ function formatProblem(error: ErrorObject): string {
 					}
 					return `${article}\`${t}\``;
 				});
-				return `needs to be ${formatted.join(' or ')}`;
+
+				// Two types: "a `string` or `null`"
+				// Three+ types: "a `string`, a `number`, or `null`" (Oxford comma)
+				if (formatted.length === 2) {
+					return `needs to be ${formatted[0]} or ${formatted[1]}`;
+				}
+
+				const last = formatted[formatted.length - 1];
+				const rest = formatted.slice(0, -1);
+				return `needs to be ${rest.join(', ')}, or ${last}`;
 			}
 
 			const singleType = Array.isArray(typeParam) ? typeParam[0] : typeParam;
