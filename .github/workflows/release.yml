@@ -47,7 +47,7 @@ jobs:
         id: bump
         run: |
           npm version ${{ inputs.version }} -m "chore: release v%s"
-          echo "version=$(node -p \"require('./package.json').version\")" >> $GITHUB_OUTPUT
+          echo "version=$(node -p 'require("./package.json").version')" >> $GITHUB_OUTPUT
 
       - name: Build
         run: npm run build
