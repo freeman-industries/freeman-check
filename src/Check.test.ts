@@ -1839,3 +1839,338 @@ describe('edge cases and complex scenarios', () => {
 		});
 	});
 });
+
+describe('audit gap coverage', () => {
+
+	describe('dependentRequired', () => {
+		it('should reject when a dependent property is missing', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					credit_card: { type: 'string' },
+					billing_address: { type: 'string' },
+				},
+				dependentRequired: {
+					credit_card: ['billing_address'],
+				},
+			});
+			expect(() => check.test({ credit_card: '4111-1111' })).to.throw(CheckError);
+			// Should indicate that credit_card requires billing_address, not "is invalid"
+		});
+
+		it('should accept when all dependent properties are present', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					credit_card: { type: 'string' },
+					billing_address: { type: 'string' },
+				},
+				dependentRequired: {
+					credit_card: ['billing_address'],
+				},
+			});
+			expect(() => check.test({ credit_card: '4111-1111', billing_address: '123 Main St' })).to.not.throw();
+		});
+
+		it('should not require dependent properties when trigger is absent', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					credit_card: { type: 'string' },
+					billing_address: { type: 'string' },
+				},
+				dependentRequired: {
+					credit_card: ['billing_address'],
+				},
+			});
+			expect(() => check.test({ billing_address: '123 Main St' })).to.not.throw();
+		});
+
+		it('should handle multiple dependent properties', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					credit_card: { type: 'string' },
+					billing_address: { type: 'string' },
+					cvv: { type: 'string' },
+				},
+				dependentRequired: {
+					credit_card: ['billing_address', 'cvv'],
+				},
+			});
+			expect(() => check.test({ credit_card: '4111-1111' })).to.throw(CheckError);
+		});
+	});
+
+	describe('unevaluatedProperties', () => {
+		it('should reject extra properties in allOf composed schemas', () => {
+			const check = new Check({
+				type: 'object',
+				allOf: [
+					{ type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
+					{ type: 'object', properties: { age: { type: 'integer' } }, required: ['age'] },
+				],
+				unevaluatedProperties: false,
+			});
+			expect(() => check.test({ name: 'Alice', age: 30, extra: true })).to.throw(CheckError, '`extra` is not allowed.');
+		});
+
+		it('should accept valid data with no unevaluated properties', () => {
+			const check = new Check({
+				type: 'object',
+				allOf: [
+					{ type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
+					{ type: 'object', properties: { age: { type: 'integer' } }, required: ['age'] },
+				],
+				unevaluatedProperties: false,
+			});
+			expect(() => check.test({ name: 'Alice', age: 30 })).to.not.throw();
+		});
+
+		it('should report multiple unevaluated properties', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { name: { type: 'string' } },
+				unevaluatedProperties: false,
+			});
+			expect(() => check.test({ name: 'Alice', foo: 1, bar: 2 })).to.throw(CheckError);
+			// Should contain both foo and bar as "is not allowed"
+		});
+	});
+
+	describe('unevaluatedItems', () => {
+		it('should reject extra items beyond prefixItems', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					coords: {
+						type: 'array',
+						prefixItems: [
+							{ type: 'number' },
+							{ type: 'number' },
+						],
+						unevaluatedItems: false,
+					},
+				},
+			});
+			expect(() => check.test({ coords: [1, 2, 3] })).to.throw(CheckError);
+			// Should indicate too many items, not "is invalid"
+		});
+
+		it('should accept valid tuple data', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					coords: {
+						type: 'array',
+						prefixItems: [
+							{ type: 'number' },
+							{ type: 'number' },
+						],
+						unevaluatedItems: false,
+					},
+				},
+			});
+			expect(() => check.test({ coords: [1, 2] })).to.not.throw();
+		});
+	});
+
+	describe('allOf', () => {
+		it('should report errors from allOf subschemas directly (required)', () => {
+			const check = new Check({
+				type: 'object',
+				allOf: [
+					{ type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
+					{ type: 'object', properties: { email: { type: 'string', format: 'email' } }, required: ['email'] },
+				],
+			});
+			expect(() => check.test({})).to.throw(CheckError, '`name` is missing.');
+		});
+
+		it('should report type errors from allOf subschemas', () => {
+			const check = new Check({
+				type: 'object',
+				allOf: [
+					{ type: 'object', properties: { name: { type: 'string' } } },
+					{ type: 'object', properties: { age: { type: 'integer' } } },
+				],
+			});
+			expect(() => check.test({ name: 123, age: 'old' })).to.throw(CheckError);
+			// Should contain type errors for both name and age
+		});
+
+		it('should accept data valid against all allOf subschemas', () => {
+			const check = new Check({
+				type: 'object',
+				allOf: [
+					{ type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
+					{ type: 'object', properties: { age: { type: 'integer' } }, required: ['age'] },
+				],
+			});
+			expect(() => check.test({ name: 'Alice', age: 30 })).to.not.throw();
+		});
+
+		it('should combine allOf with additionalProperties correctly', () => {
+			const check = new Check({
+				type: 'object',
+				allOf: [
+					{ type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
+				],
+				additionalProperties: false,
+				properties: { name: { type: 'string' } },
+			});
+			expect(() => check.test({ name: 'Alice', extra: true })).to.throw(CheckError, '`extra` is not allowed.');
+		});
+	});
+
+	describe('$ref and $defs', () => {
+		it('should resolve $ref and report errors using data path', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					address: { $ref: '#/$defs/Address' },
+				},
+				$defs: {
+					Address: {
+						type: 'object',
+						properties: {
+							street: { type: 'string' },
+							city: { type: 'string' },
+						},
+						required: ['street', 'city'],
+					},
+				},
+			});
+			expect(() => check.test({ address: {} })).to.throw(CheckError, '`address.street` is missing.');
+		});
+
+		it('should handle $ref with type constraints', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					config: { $ref: '#/$defs/Config' },
+				},
+				$defs: {
+					Config: {
+						type: 'object',
+						properties: {
+							timeout: { type: 'integer', minimum: 1 },
+						},
+						required: ['timeout'],
+					},
+				},
+			});
+			expect(() => check.test({ config: { timeout: 0 } })).to.throw(CheckError, '`config.timeout` needs to be at least 1.');
+		});
+
+		it('should accept valid data through $ref', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					address: { $ref: '#/$defs/Address' },
+				},
+				$defs: {
+					Address: {
+						type: 'object',
+						properties: { city: { type: 'string' } },
+						required: ['city'],
+					},
+				},
+			});
+			expect(() => check.test({ address: { city: 'London' } })).to.not.throw();
+		});
+
+		it('should handle $ref in array items', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					users: {
+						type: 'array',
+						items: { $ref: '#/$defs/User' },
+					},
+				},
+				$defs: {
+					User: {
+						type: 'object',
+						properties: { name: { type: 'string' } },
+						required: ['name'],
+					},
+				},
+			});
+			expect(() => check.test({ users: [{}] })).to.throw(CheckError, '`users[0].name` is missing.');
+		});
+
+		it('should handle nested $ref ($defs referencing other $defs)', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					order: { $ref: '#/$defs/Order' },
+				},
+				$defs: {
+					Order: {
+						type: 'object',
+						properties: {
+							item: { $ref: '#/$defs/Item' },
+						},
+						required: ['item'],
+					},
+					Item: {
+						type: 'object',
+						properties: {
+							name: { type: 'string' },
+						},
+						required: ['name'],
+					},
+				},
+			});
+			expect(() => check.test({ order: { item: {} } })).to.throw(CheckError, '`order.item.name` is missing.');
+		});
+	});
+
+	describe('patternProperties', () => {
+		it('should validate values matching a pattern key', () => {
+			const check = new Check({
+				type: 'object',
+				patternProperties: {
+					'^x-': { type: 'string' },
+				},
+			});
+			expect(() => check.test({ 'x-custom': 123 })).to.throw(CheckError);
+			// Error should be about type, not "is invalid"
+		});
+
+		it('should accept valid pattern property values', () => {
+			const check = new Check({
+				type: 'object',
+				patternProperties: {
+					'^x-': { type: 'string' },
+				},
+			});
+			expect(() => check.test({ 'x-custom': 'hello' })).to.not.throw();
+		});
+
+		it('should ignore properties not matching the pattern', () => {
+			const check = new Check({
+				type: 'object',
+				patternProperties: {
+					'^x-': { type: 'string' },
+				},
+			});
+			// 'normal' doesn't match '^x-', so no constraint applied
+			expect(() => check.test({ normal: 123, 'x-valid': 'ok' })).to.not.throw();
+		});
+	});
+
+	describe('3+ type union (Oxford comma)', () => {
+		it('should format 3-type union with Oxford comma end-to-end', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					value: { type: ['string', 'number', 'null'] },
+				},
+			});
+			expect(() => check.test({ value: true })).to.throw(CheckError, '`value` needs to be a `string`, a `number`, or `null`.');
+		});
+	});
+
+});

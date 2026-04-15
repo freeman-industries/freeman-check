@@ -481,7 +481,7 @@ describe('formatProblem', () => {
 		it('should format unevaluatedItems', () => {
 			const error = mockError({
 				keyword: 'unevaluatedItems',
-				params: { len: 2 },
+				params: { limit: 2 },
 			});
 			expect(formatProblem(error)).to.equal('must not have more than 2 items');
 		});

@@ -214,7 +214,7 @@ function formatProblem(error: ErrorObject): string {
 		}
 
 		case 'unevaluatedItems': {
-			return `must not have more than ${(error.params as { len: number }).len} items`;
+			return `must not have more than ${(error.params as { limit: number }).limit} items`;
 		}
 
 		case 'dependencies': {
