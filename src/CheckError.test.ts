@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import { CheckError } from './CheckError';
-import { Schema } from 'jsonschema';
+import { Schema } from './index';
 
 describe('CheckError', () => {
 	const schema: Schema = { type: 'object' };
