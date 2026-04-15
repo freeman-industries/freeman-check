@@ -48,6 +48,13 @@ function extractFieldName(error: ErrorObject): string {
 		return parent ? `${parent}.${field}` : field;
 	}
 
+	// For 'unevaluatedProperties', the extra field is in params.unevaluatedProperty
+	if (keyword === 'unevaluatedProperties') {
+		const parent = instancePath ? convertPath(instancePath) : '';
+		const field = (params as { unevaluatedProperty: string }).unevaluatedProperty;
+		return parent ? `${parent}.${field}` : field;
+	}
+
 	// For everything else, use instancePath
 	if (!instancePath || instancePath === '') {
 		return 'value';
@@ -63,6 +70,10 @@ function extractFieldName(error: ErrorObject): string {
 function formatProblem(error: ErrorObject): string {
 	switch (error.keyword) {
 		case 'additionalProperties': {
+			return 'is not allowed';
+		}
+
+		case 'unevaluatedProperties': {
 			return 'is not allowed';
 		}
 
@@ -193,7 +204,17 @@ function formatProblem(error: ErrorObject): string {
 			return `must not have more than ${(error.params as { limit: number }).limit} items`;
 		}
 
+		case 'unevaluatedItems': {
+			return `must not have more than ${(error.params as { len: number }).len} items`;
+		}
+
 		case 'dependencies': {
+			const property = (error.params as { property: string }).property;
+			const deps = (error.params as { deps: string }).deps;
+			return `has "${property}" which requires "${deps}"`;
+		}
+
+		case 'dependentRequired': {
 			const property = (error.params as { property: string }).property;
 			const deps = (error.params as { deps: string }).deps;
 			return `has "${property}" which requires "${deps}"`;

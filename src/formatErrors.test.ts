@@ -131,6 +131,26 @@ describe('extractFieldName', () => {
 			expect(extractFieldName(error)).to.equal('users[0].extra');
 		});
 	});
+
+	describe('unevaluatedProperties keyword', () => {
+		it('should use unevaluatedProperty for root-level unevaluated property', () => {
+			const error = mockError({
+				keyword: 'unevaluatedProperties',
+				instancePath: '',
+				params: { unevaluatedProperty: 'extra' },
+			});
+			expect(extractFieldName(error)).to.equal('extra');
+		});
+
+		it('should prepend parent path for nested unevaluated property', () => {
+			const error = mockError({
+				keyword: 'unevaluatedProperties',
+				instancePath: '/config',
+				params: { unevaluatedProperty: 'unknown' },
+			});
+			expect(extractFieldName(error)).to.equal('config.unknown');
+		});
+	});
 });
 
 describe('formatProblem', () => {
@@ -412,6 +432,38 @@ describe('formatProblem', () => {
 		it('should format false schema', () => {
 			const error = mockError({ keyword: 'false schema', params: {} });
 			expect(formatProblem(error)).to.equal('is not allowed');
+		});
+
+		it('should format dependentRequired', () => {
+			const error = mockError({
+				keyword: 'dependentRequired',
+				params: { property: 'credit_card', missingProperty: 'billing_address', deps: 'billing_address', depsCount: 1 },
+			});
+			expect(formatProblem(error)).to.equal('has "credit_card" which requires "billing_address"');
+		});
+
+		it('should format dependentRequired with multiple deps', () => {
+			const error = mockError({
+				keyword: 'dependentRequired',
+				params: { property: 'credit_card', missingProperty: 'billing_address', deps: 'billing_address, cvv', depsCount: 2 },
+			});
+			expect(formatProblem(error)).to.equal('has "credit_card" which requires "billing_address, cvv"');
+		});
+
+		it('should format unevaluatedProperties', () => {
+			const error = mockError({
+				keyword: 'unevaluatedProperties',
+				params: { unevaluatedProperty: 'extra' },
+			});
+			expect(formatProblem(error)).to.equal('is not allowed');
+		});
+
+		it('should format unevaluatedItems', () => {
+			const error = mockError({
+				keyword: 'unevaluatedItems',
+				params: { len: 2 },
+			});
+			expect(formatProblem(error)).to.equal('must not have more than 2 items');
 		});
 
 		it('should format unknown keyword as fallback', () => {
