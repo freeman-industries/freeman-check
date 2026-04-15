@@ -510,3 +510,355 @@ describe('backwards compatibility', () => {
 		});
 	});
 });
+
+describe('new keyword handling — numeric, string, array', () => {
+
+	describe('minimum', () => {
+		it('should reject a value below minimum', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { age: { type: 'integer', minimum: 0 } },
+			});
+			expect(() => check.test({ age: -1 })).to.throw(CheckError, '`age` needs to be at least 0.');
+		});
+
+		it('should accept a value equal to minimum', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { age: { type: 'integer', minimum: 0 } },
+			});
+			expect(() => check.test({ age: 0 })).to.not.throw();
+		});
+
+		it('should handle minimum on nested fields', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					config: {
+						type: 'object',
+						properties: { retries: { type: 'integer', minimum: 1 } },
+					},
+				},
+			});
+			expect(() => check.test({ config: { retries: 0 } })).to.throw(CheckError, '`config.retries` needs to be at least 1.');
+		});
+
+		it('should handle minimum in array items', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					scores: {
+						type: 'array',
+						items: { type: 'number', minimum: 0 },
+					},
+				},
+			});
+			expect(() => check.test({ scores: [10, -5, 20] })).to.throw(CheckError, '`scores[1]` needs to be at least 0.');
+		});
+
+		it('should handle minimum with decimal limit', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { rate: { type: 'number', minimum: 0.01 } },
+			});
+			expect(() => check.test({ rate: 0 })).to.throw(CheckError, '`rate` needs to be at least 0.01.');
+		});
+	});
+
+	describe('maximum', () => {
+		it('should reject a value above maximum', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { quantity: { type: 'integer', maximum: 100 } },
+			});
+			expect(() => check.test({ quantity: 150 })).to.throw(CheckError, '`quantity` needs to be at most 100.');
+		});
+
+		it('should accept a value equal to maximum', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { quantity: { type: 'integer', maximum: 100 } },
+			});
+			expect(() => check.test({ quantity: 100 })).to.not.throw();
+		});
+
+		it('should handle maximum on nested fields', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					settings: {
+						type: 'object',
+						properties: { timeout: { type: 'integer', maximum: 30 } },
+					},
+				},
+			});
+			expect(() => check.test({ settings: { timeout: 60 } })).to.throw(CheckError, '`settings.timeout` needs to be at most 30.');
+		});
+	});
+
+	describe('exclusiveMinimum', () => {
+		it('should reject a value equal to exclusiveMinimum', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { amount: { type: 'number', exclusiveMinimum: 0 } },
+			});
+			expect(() => check.test({ amount: 0 })).to.throw(CheckError, '`amount` needs to be greater than 0.');
+		});
+
+		it('should accept a value above exclusiveMinimum', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { amount: { type: 'number', exclusiveMinimum: 0 } },
+			});
+			expect(() => check.test({ amount: 0.01 })).to.not.throw();
+		});
+	});
+
+	describe('exclusiveMaximum', () => {
+		it('should reject a value equal to exclusiveMaximum', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { score: { type: 'number', exclusiveMaximum: 100 } },
+			});
+			expect(() => check.test({ score: 100 })).to.throw(CheckError, '`score` needs to be less than 100.');
+		});
+
+		it('should accept a value below exclusiveMaximum', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { score: { type: 'number', exclusiveMaximum: 100 } },
+			});
+			expect(() => check.test({ score: 99.99 })).to.not.throw();
+		});
+	});
+
+	describe('multipleOf', () => {
+		it('should reject a value not a multiple', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { quantity: { type: 'integer', multipleOf: 5 } },
+			});
+			expect(() => check.test({ quantity: 7 })).to.throw(CheckError, '`quantity` needs to be a multiple of 5.');
+		});
+
+		it('should accept a valid multiple', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { quantity: { type: 'integer', multipleOf: 5 } },
+			});
+			expect(() => check.test({ quantity: 15 })).to.not.throw();
+		});
+
+		it('should handle decimal multipleOf', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { price: { type: 'number', multipleOf: 0.01 } },
+			});
+			expect(() => check.test({ price: 1.005 })).to.throw(CheckError, '`price` needs to be a multiple of 0.01.');
+		});
+	});
+
+	describe('minLength', () => {
+		it('should reject empty string when minLength is 1 (singular)', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { name: { type: 'string', minLength: 1 } },
+			});
+			expect(() => check.test({ name: '' })).to.throw(CheckError, '`name` needs to have at least 1 character.');
+		});
+
+		it('should use plural for minLength > 1', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { code: { type: 'string', minLength: 3 } },
+			});
+			expect(() => check.test({ code: 'ab' })).to.throw(CheckError, '`code` needs to have at least 3 characters.');
+		});
+
+		it('should accept a string meeting minLength', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { name: { type: 'string', minLength: 1 } },
+			});
+			expect(() => check.test({ name: 'a' })).to.not.throw();
+		});
+
+		it('should handle nested minLength', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					user: {
+						type: 'object',
+						properties: { bio: { type: 'string', minLength: 10 } },
+					},
+				},
+			});
+			expect(() => check.test({ user: { bio: 'short' } })).to.throw(CheckError, '`user.bio` needs to have at least 10 characters.');
+		});
+	});
+
+	describe('maxLength', () => {
+		it('should reject a string exceeding maxLength', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { bio: { type: 'string', maxLength: 10 } },
+			});
+			expect(() => check.test({ bio: 'this is a very long string' })).to.throw(CheckError, '`bio` needs to have at most 10 characters.');
+		});
+
+		it('should accept a string at maxLength', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { bio: { type: 'string', maxLength: 10 } },
+			});
+			expect(() => check.test({ bio: '1234567890' })).to.not.throw();
+		});
+	});
+
+	describe('pattern', () => {
+		it('should hide regex and show generic message', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { time: { type: 'string', pattern: '^([01]\\d|2[0-3]):([0-5]\\d)$' } },
+			});
+			expect(() => check.test({ time: '25:00' })).to.throw(CheckError, '`time` is not in the expected format.');
+		});
+
+		it('should handle simple pattern', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { code: { type: 'string', pattern: '^[A-Z]{3}$' } },
+			});
+			expect(() => check.test({ code: 'ab' })).to.throw(CheckError, '`code` is not in the expected format.');
+		});
+
+		it('should accept a matching value', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { code: { type: 'string', pattern: '^[A-Z]{3}$' } },
+			});
+			expect(() => check.test({ code: 'ABC' })).to.not.throw();
+		});
+
+		it('should handle nested pattern', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					address: {
+						type: 'object',
+						properties: { postcode: { type: 'string', pattern: '^[0-9]{5}$' } },
+					},
+				},
+			});
+			expect(() => check.test({ address: { postcode: 'ABCDE' } })).to.throw(CheckError, '`address.postcode` is not in the expected format.');
+		});
+	});
+
+	describe('minItems', () => {
+		it('should reject empty array when minItems is 1 (singular)', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { tags: { type: 'array', items: { type: 'string' }, minItems: 1 } },
+			});
+			expect(() => check.test({ tags: [] })).to.throw(CheckError, '`tags` needs to have at least 1 item.');
+		});
+
+		it('should use plural for minItems > 1', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { tags: { type: 'array', items: { type: 'string' }, minItems: 3 } },
+			});
+			expect(() => check.test({ tags: ['a', 'b'] })).to.throw(CheckError, '`tags` needs to have at least 3 items.');
+		});
+
+		it('should accept array meeting minItems', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { tags: { type: 'array', items: { type: 'string' }, minItems: 1 } },
+			});
+			expect(() => check.test({ tags: ['a'] })).to.not.throw();
+		});
+	});
+
+	describe('maxItems', () => {
+		it('should reject array exceeding maxItems', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { tags: { type: 'array', items: { type: 'string' }, maxItems: 2 } },
+			});
+			expect(() => check.test({ tags: ['a', 'b', 'c'] })).to.throw(CheckError, '`tags` needs to have at most 2 items.');
+		});
+
+		it('should accept array at maxItems', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { tags: { type: 'array', items: { type: 'string' }, maxItems: 2 } },
+			});
+			expect(() => check.test({ tags: ['a', 'b'] })).to.not.throw();
+		});
+
+		it('should handle nested array maxItems', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					config: {
+						type: 'object',
+						properties: { values: { type: 'array', items: { type: 'number' }, maxItems: 5 } },
+					},
+				},
+			});
+			expect(() => check.test({ config: { values: [1, 2, 3, 4, 5, 6] } })).to.throw(CheckError, '`config.values` needs to have at most 5 items.');
+		});
+	});
+
+	describe('uniqueItems', () => {
+		it('should reject array with duplicate items', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { tags: { type: 'array', items: { type: 'string' }, uniqueItems: true } },
+			});
+			expect(() => check.test({ tags: ['a', 'b', 'a'] })).to.throw(CheckError, '`tags` must not have duplicate items.');
+		});
+
+		it('should accept array with unique items', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { tags: { type: 'array', items: { type: 'string' }, uniqueItems: true } },
+			});
+			expect(() => check.test({ tags: ['a', 'b', 'c'] })).to.not.throw();
+		});
+
+		it('should reject duplicate numbers', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { ids: { type: 'array', items: { type: 'number' }, uniqueItems: true } },
+			});
+			expect(() => check.test({ ids: [1, 2, 3, 2] })).to.throw(CheckError, '`ids` must not have duplicate items.');
+		});
+	});
+
+	describe('combined constraints', () => {
+		it('should report both minLength and pattern failures', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					name: { type: 'string', minLength: 1 },
+					code: { type: 'string', pattern: '^[A-Z]+$' },
+				},
+			});
+			expect(() => check.test({ name: '', code: 'abc' })).to.throw(CheckError);
+			// Should contain both errors
+		});
+
+		it('should report minimum and maximum from different fields', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					min_age: { type: 'integer', minimum: 0 },
+					max_age: { type: 'integer', maximum: 150 },
+				},
+			});
+			expect(() => check.test({ min_age: -1, max_age: 200 })).to.throw(CheckError, '`min_age` needs to be at least 0. `max_age` needs to be at most 150.');
+		});
+	});
+});
