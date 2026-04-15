@@ -862,3 +862,386 @@ describe('new keyword handling — numeric, string, array', () => {
 		});
 	});
 });
+
+describe('new keyword handling — structural and compound', () => {
+
+	describe('oneOf (without discriminator)', () => {
+		it('should reject data matching no subschema with a generic message', () => {
+			const check = new Check({
+				oneOf: [
+					{ type: 'object', properties: { type: { const: 'a' } }, required: ['type'] },
+					{ type: 'object', properties: { type: { const: 'b' } }, required: ['type'] },
+				],
+			});
+			expect(() => check.test({ type: 'c' })).to.throw(CheckError, '`value` must match exactly one of the allowed schemas.');
+		});
+
+		it('should reject data matching multiple subschemas', () => {
+			const check = new Check({
+				oneOf: [
+					{ type: 'object', properties: { name: { type: 'string' } } },
+					{ type: 'object', properties: { name: { type: 'string' } } },
+				],
+			});
+			expect(() => check.test({ name: 'hello' })).to.throw(CheckError, '`value` must match exactly one of the allowed schemas.');
+		});
+
+		it('should accept data matching exactly one subschema', () => {
+			const check = new Check({
+				oneOf: [
+					{ type: 'object', properties: { type: { const: 'a' } }, required: ['type'] },
+					{ type: 'object', properties: { type: { const: 'b' } }, required: ['type'] },
+				],
+			});
+			expect(() => check.test({ type: 'a' })).to.not.throw();
+		});
+	});
+
+	describe('anyOf', () => {
+		it('should reject data matching no subschema', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					value: { anyOf: [{ type: 'string' }, { type: 'number' }] },
+				},
+			});
+			expect(() => check.test({ value: true })).to.throw(CheckError, '`value` must match at least one of the allowed schemas.');
+		});
+
+		it('should accept data matching at least one subschema', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					value: { anyOf: [{ type: 'string' }, { type: 'number' }] },
+				},
+			});
+			expect(() => check.test({ value: 'hello' })).to.not.throw();
+		});
+
+		it('should accept data matching multiple subschemas', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					value: { anyOf: [{ type: 'string', minLength: 1 }, { type: 'string' }] },
+				},
+			});
+			expect(() => check.test({ value: 'hello' })).to.not.throw();
+		});
+	});
+
+	describe('discriminator', () => {
+		it('should reject an unrecognized tag value (mapping error)', () => {
+			const check = new Check({
+				type: 'object',
+				discriminator: { propertyName: 'type' },
+				required: ['type'],
+				oneOf: [
+					{ type: 'object', properties: { type: { const: 'a' }, x: { type: 'number' } }, required: ['type', 'x'] },
+					{ type: 'object', properties: { type: { const: 'b' }, y: { type: 'number' } }, required: ['type', 'y'] },
+				],
+			});
+			expect(() => check.test({ type: 'unknown' })).to.throw(CheckError, '`value` has an unrecognized "type" value: "unknown".');
+		});
+
+		it('should reject a non-string tag value (tag type error)', () => {
+			const check = new Check({
+				type: 'object',
+				discriminator: { propertyName: 'type' },
+				required: ['type'],
+				oneOf: [
+					{ type: 'object', properties: { type: { const: 'a' } }, required: ['type'] },
+					{ type: 'object', properties: { type: { const: 'b' } }, required: ['type'] },
+				],
+			});
+			expect(() => check.test({ type: 123 })).to.throw(CheckError, '`value` has a "type" that is not a string.');
+		});
+
+		it('should report field-level errors from the matched subschema', () => {
+			const check = new Check({
+				type: 'object',
+				discriminator: { propertyName: 'type' },
+				required: ['type'],
+				oneOf: [
+					{ type: 'object', properties: { type: { const: 'a' }, x: { type: 'number' } }, required: ['type', 'x'] },
+					{ type: 'object', properties: { type: { const: 'b' }, y: { type: 'number' } }, required: ['type', 'y'] },
+				],
+			});
+			expect(() => check.test({ type: 'a' })).to.throw(CheckError, '`x` is missing.');
+		});
+
+		it('should report type errors from the matched subschema', () => {
+			const check = new Check({
+				type: 'object',
+				discriminator: { propertyName: 'type' },
+				required: ['type'],
+				oneOf: [
+					{ type: 'object', properties: { type: { const: 'a' }, x: { type: 'number' } }, required: ['type', 'x'] },
+					{ type: 'object', properties: { type: { const: 'b' }, y: { type: 'number' } }, required: ['type', 'y'] },
+				],
+			});
+			expect(() => check.test({ type: 'a', x: 'not-a-number' })).to.throw(CheckError, '`x` needs to be a `number`.');
+		});
+	});
+
+	describe('if/then/else', () => {
+		it('should report specific then errors when if condition matches', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					type: { type: 'string' },
+					company_name: { type: 'string' },
+				},
+				if: { properties: { type: { const: 'business' } } },
+				then: { required: ['company_name'] },
+			});
+			expect(() => check.test({ type: 'business' })).to.throw(CheckError, '`company_name` is missing.');
+		});
+
+		it('should not require then fields when if condition does not match', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					type: { type: 'string' },
+					company_name: { type: 'string' },
+				},
+				if: { properties: { type: { const: 'business' } } },
+				then: { required: ['company_name'] },
+			});
+			expect(() => check.test({ type: 'personal' })).to.not.throw();
+		});
+
+		it('should report specific else errors when if condition does not match', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					type: { type: 'string' },
+					company_name: { type: 'string' },
+					first_name: { type: 'string' },
+				},
+				if: { properties: { type: { const: 'business' } } },
+				then: { required: ['company_name'] },
+				else: { required: ['first_name'] },
+			});
+			expect(() => check.test({ type: 'personal' })).to.throw(CheckError, '`first_name` is missing.');
+		});
+
+		it('should handle then with type constraints', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					enabled: { type: 'boolean' },
+					config: { type: 'object' },
+				},
+				if: { properties: { enabled: { const: true } } },
+				then: { required: ['config'] },
+			});
+			expect(() => check.test({ enabled: true })).to.throw(CheckError, '`config` is missing.');
+		});
+	});
+
+	describe('const', () => {
+		it('should reject a non-matching string value', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { type: { const: 'webhook' } },
+			});
+			expect(() => check.test({ type: 'other' })).to.throw(CheckError, '`type` needs to be "webhook".');
+		});
+
+		it('should reject a non-matching numeric value', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { version: { const: 2 } },
+			});
+			expect(() => check.test({ version: 1 })).to.throw(CheckError, '`version` needs to be 2.');
+		});
+
+		it('should reject a non-matching boolean value', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { enabled: { const: true } },
+			});
+			expect(() => check.test({ enabled: false })).to.throw(CheckError, '`enabled` needs to be true.');
+		});
+
+		it('should reject a non-matching null value', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { deleted: { const: null } },
+			});
+			expect(() => check.test({ deleted: 'not-null' })).to.throw(CheckError, '`deleted` needs to be null.');
+		});
+
+		it('should accept a matching const value', () => {
+			const check = new Check({
+				type: 'object',
+				properties: { type: { const: 'webhook' } },
+			});
+			expect(() => check.test({ type: 'webhook' })).to.not.throw();
+		});
+	});
+
+	describe('not', () => {
+		it('should reject data matching the excluded schema', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					value: { not: { type: 'string' } },
+				},
+			});
+			expect(() => check.test({ value: 'hello' })).to.throw(CheckError, '`value` must not match the excluded schema.');
+		});
+
+		it('should accept data not matching the excluded schema', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					value: { not: { type: 'string' } },
+				},
+			});
+			expect(() => check.test({ value: 123 })).to.not.throw();
+		});
+	});
+
+	describe('contains', () => {
+		it('should reject an array with no matching items (singular)', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					roles: { type: 'array', contains: { const: 'admin' } },
+				},
+			});
+			expect(() => check.test({ roles: ['user', 'viewer'] })).to.throw(CheckError, '`roles` must contain at least 1 matching item.');
+		});
+
+		it('should accept an array with a matching item', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					roles: { type: 'array', contains: { const: 'admin' } },
+				},
+			});
+			expect(() => check.test({ roles: ['user', 'admin'] })).to.not.throw();
+		});
+	});
+
+	describe('propertyNames', () => {
+		it('should reject an object with an invalid property name', () => {
+			const check = new Check({
+				type: 'object',
+				propertyNames: { pattern: '^[a-z]+$' },
+			});
+			expect(() => check.test({ validkey: 1, 'INVALID': 2 })).to.throw(CheckError);
+			// Should mention invalid property name
+		});
+
+		it('should accept an object with all valid property names', () => {
+			const check = new Check({
+				type: 'object',
+				propertyNames: { pattern: '^[a-z]+$' },
+			});
+			expect(() => check.test({ abc: 1, def: 2 })).to.not.throw();
+		});
+	});
+
+	describe('dependencies', () => {
+		it('should reject when a dependent property is missing', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					credit_card: { type: 'string' },
+					billing_address: { type: 'string' },
+				},
+				dependencies: {
+					credit_card: ['billing_address'],
+				},
+			});
+			expect(() => check.test({ credit_card: '1234' })).to.throw(CheckError);
+			// Should indicate that credit_card requires billing_address
+		});
+
+		it('should accept when all dependent properties are present', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					credit_card: { type: 'string' },
+					billing_address: { type: 'string' },
+				},
+				dependencies: {
+					credit_card: ['billing_address'],
+				},
+			});
+			expect(() => check.test({ credit_card: '1234', billing_address: '123 Main St' })).to.not.throw();
+		});
+
+		it('should not require dependent properties when trigger is absent', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					credit_card: { type: 'string' },
+					billing_address: { type: 'string' },
+				},
+				dependencies: {
+					credit_card: ['billing_address'],
+				},
+			});
+			expect(() => check.test({ billing_address: '123 Main St' })).to.not.throw();
+		});
+	});
+
+	describe('maxProperties', () => {
+		it('should reject an object with too many properties', () => {
+			const check = new Check({
+				type: 'object',
+				maxProperties: 2,
+			});
+			expect(() => check.test({ a: 1, b: 2, c: 3 })).to.throw(CheckError, '`value` must not have more than 2 properties.');
+		});
+
+		it('should accept an object at the limit', () => {
+			const check = new Check({
+				type: 'object',
+				maxProperties: 2,
+			});
+			expect(() => check.test({ a: 1, b: 2 })).to.not.throw();
+		});
+	});
+
+	describe('minProperties', () => {
+		it('should reject an empty object when minProperties is 1 (singular)', () => {
+			const check = new Check({
+				type: 'object',
+				minProperties: 1,
+			});
+			expect(() => check.test({})).to.throw(CheckError, '`value` must have at least 1 property.');
+		});
+
+		it('should reject an object with too few properties (plural)', () => {
+			const check = new Check({
+				type: 'object',
+				minProperties: 3,
+			});
+			expect(() => check.test({ a: 1, b: 2 })).to.throw(CheckError, '`value` must have at least 3 properties.');
+		});
+
+		it('should accept an object meeting minProperties', () => {
+			const check = new Check({
+				type: 'object',
+				minProperties: 1,
+			});
+			expect(() => check.test({ a: 1 })).to.not.throw();
+		});
+	});
+
+	describe('false schema', () => {
+		it('should reject any value against a false schema', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					blocked: false as any,
+				},
+			});
+			expect(() => check.test({ blocked: 'anything' })).to.throw(CheckError, '`blocked` is not allowed.');
+		});
+	});
+});
