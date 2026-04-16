@@ -1,6 +1,7 @@
 import { ValidateFunction, SchemaObject } from 'ajv';
 import { CheckError } from './CheckError';
 import { ajv } from './ajvInstance';
+import { normalizeSchema } from './normalizeSchema';
 import { normalizeErrors, formatMessage } from './formatErrors';
 
 /**
@@ -19,7 +20,7 @@ export class Check {
 		if (!schema) throw new CheckError('Schema must be defined in constructor.');
 
 		this.schema = schema;
-		this.validate = ajv.compile(schema);
+		this.validate = ajv.compile(normalizeSchema(schema));
 	}
 
 	/**
