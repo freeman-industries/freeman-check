@@ -2331,31 +2331,195 @@ describe('audit gap coverage', () => {
 		});
 	});
 
+	describe('tuple schema normalization', () => {
+		it('should validate a root-level legacy tuple schema', () => {
+			const check = new Check({
+				type: 'array',
+				items: [{ type: 'string' }, { type: 'number' }],
+			});
+			// Valid tuple
+			expect(() => check.test(['hello', 42])).to.not.throw();
+			// Wrong type at index 0
+			expect(() => check.test([123, 42])).to.throw(CheckError);
+			// Wrong type at index 1
+			expect(() => check.test(['hello', 'world'])).to.throw(CheckError);
+		});
+
+		it('should reject extra items when additionalItems is absent (defaults to false)', () => {
+			const check = new Check({
+				type: 'array',
+				items: [{ type: 'string' }, { type: 'number' }],
+			});
+			expect(() => check.test(['hello', 42, 'extra'])).to.throw(CheckError);
+		});
+
+		it('should reject extra items when additionalItems is false', () => {
+			const check = new Check({
+				type: 'array',
+				items: [{ type: 'string' }, { type: 'number' }],
+				additionalItems: false,
+			} as any);
+			expect(() => check.test(['hello', 42, 'extra'])).to.throw(CheckError);
+		});
+
+		it('should allow extra items when additionalItems is true', () => {
+			const check = new Check({
+				type: 'array',
+				items: [{ type: 'string' }, { type: 'number' }],
+				additionalItems: true,
+			} as any);
+			expect(() => check.test(['hello', 42, 'extra', true])).to.not.throw();
+		});
+
+		it('should validate extra items against additionalItems schema', () => {
+			const check = new Check({
+				type: 'array',
+				items: [{ type: 'string' }],
+				additionalItems: { type: 'number' },
+			} as any);
+			// Valid: extra items are numbers
+			expect(() => check.test(['hello', 1, 2, 3])).to.not.throw();
+			// Invalid: extra item is a string
+			expect(() => check.test(['hello', 1, 'bad'])).to.throw(CheckError);
+		});
+
+		it('should validate tuples nested inside properties', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					coords: {
+						type: 'array',
+						items: [{ type: 'number' }, { type: 'number' }],
+					},
+				},
+			});
+			expect(() => check.test({ coords: [1, 2] })).to.not.throw();
+			expect(() => check.test({ coords: ['a', 2] })).to.throw(CheckError);
+			expect(() => check.test({ coords: [1, 2, 3] })).to.throw(CheckError);
+		});
+
+		it('should validate tuples nested inside oneOf', () => {
+			const check = new Check({
+				type: 'array',
+				oneOf: [
+					{ items: [{ type: 'string' }, { type: 'string' }] },
+					{ items: [{ type: 'number' }, { type: 'number' }] },
+				],
+			});
+			expect(() => check.test(['hello', 'world'])).to.not.throw();
+			expect(() => check.test([1, 2])).to.not.throw();
+			expect(() => check.test(['hello', 2])).to.throw(CheckError);
+		});
+
+		it('should validate tuples nested inside anyOf', () => {
+			const check = new Check({
+				type: 'array',
+				anyOf: [
+					{ items: [{ type: 'string' }, { type: 'number' }] },
+					{ items: [{ type: 'number' }, { type: 'string' }] },
+				],
+			});
+			expect(() => check.test(['hello', 42])).to.not.throw();
+			expect(() => check.test([42, 'hello'])).to.not.throw();
+			expect(() => check.test([true, true])).to.throw(CheckError);
+		});
+
+		it('should validate tuples nested inside allOf', () => {
+			const check = new Check({
+				type: 'array',
+				allOf: [
+					{ items: [{ type: 'string' }] },
+					{ minItems: 1 },
+				],
+			});
+			expect(() => check.test(['hello'])).to.not.throw();
+			expect(() => check.test([])).to.throw(CheckError);
+			expect(() => check.test([123])).to.throw(CheckError);
+		});
+
+		it('should not mutate the original schema object', () => {
+			const schema = {
+				type: 'object' as const,
+				properties: {
+					coords: {
+						type: 'array',
+						items: [{ type: 'number' }, { type: 'number' }],
+						additionalItems: false,
+					},
+				},
+			};
+			const originalJson = JSON.stringify(schema);
+			new Check(schema as any);
+			expect(JSON.stringify(schema)).to.equal(originalJson);
+		});
+
+		it('should not affect schemas already using prefixItems', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					coords: {
+						type: 'array',
+						prefixItems: [
+							{ type: 'number' },
+							{ type: 'number' },
+						],
+						items: false,
+					},
+				},
+			});
+			expect(() => check.test({ coords: [1, 2] })).to.not.throw();
+			expect(() => check.test({ coords: [1, 2, 3] })).to.throw(CheckError);
+		});
+
+		it('should produce a readable error message for tuple violations', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					coords: {
+						type: 'array',
+						items: [{ type: 'number' }, { type: 'number' }],
+					},
+				},
+			});
+			expect(() => check.test({ coords: ['bad', 2] })).to.throw(
+				CheckError,
+				/coords/,
+			);
+		});
+
+		it('should produce a readable error message for extra items', () => {
+			const check = new Check({
+				type: 'array',
+				items: [{ type: 'string' }],
+			});
+			expect(() => check.test(['hello', 'extra'])).to.throw(
+				CheckError,
+				/must not have more than 1 item/,
+			);
+		});
+	});
+
 	describe('additionalItems verification', () => {
-		it('should confirm additionalItems is dead code in Ajv2020', () => {
-			// In JSON Schema 2020-12, `items` must be an object/boolean (not an array).
-			// The array form was replaced by `prefixItems`. Since Ajv2020 rejects
-			// `items` as an array, the `additionalItems` keyword can never fire.
-			//
-			// With `prefixItems` + `additionalItems: false`, AJV silently ignores
-			// additionalItems (it's not a 2020-12 keyword). Extra items pass validation.
-			//
-			// The `additionalItems` handler in formatProblem is harmless dead code.
+		it('should enforce additionalItems via normalization in Ajv2020', () => {
+			// Legacy Draft-07 tuple: items array + additionalItems.
+			// freeman-check normalizes this to prefixItems + items (2020-12).
 			const check = new Check({
 				type: 'object',
 				properties: {
 					tuple: {
 						type: 'array',
-						prefixItems: [
+						items: [
 							{ type: 'string' },
 							{ type: 'number' },
 						],
 						additionalItems: false,
-					} as any,
+					},
 				},
-			});
-			// Extra items are NOT rejected — additionalItems is ignored in 2020-12 mode
-			expect(() => check.test({ tuple: ['a', 1, 'extra'] })).to.not.throw();
+			} as any);
+			// Extra items ARE now rejected thanks to normalization
+			expect(() => check.test({ tuple: ['a', 1, 'extra'] })).to.throw(CheckError);
+			// Valid tuple passes
+			expect(() => check.test({ tuple: ['a', 1] })).to.not.throw();
 		});
 	});
 
