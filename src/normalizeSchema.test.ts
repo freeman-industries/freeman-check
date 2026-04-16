@@ -74,6 +74,40 @@ describe('normalizeSchema', () => {
 			expect(result.prefixItems).to.deep.equal([{ type: 'string' }, { type: 'number' }]);
 			expect(result.items).to.equal(false);
 		});
+
+		it('should not set prefixItems when items is an empty array with additionalItems false', () => {
+			const schema = {
+				type: 'array' as const,
+				items: [] as any[],
+				additionalItems: false,
+			};
+			const result = normalizeSchema(schema);
+			expect(result).to.not.have.property('prefixItems');
+			expect(result.items).to.equal(false);
+			expect(result).to.not.have.property('additionalItems');
+		});
+
+		it('should not set prefixItems when items is an empty array without additionalItems', () => {
+			const schema = {
+				type: 'array' as const,
+				items: [] as any[],
+			};
+			const result = normalizeSchema(schema);
+			expect(result).to.not.have.property('prefixItems');
+			expect(result.items).to.equal(false);
+		});
+
+		it('should not set prefixItems when items is an empty array with additionalItems true', () => {
+			const schema = {
+				type: 'array' as const,
+				items: [] as any[],
+				additionalItems: true,
+			};
+			const result = normalizeSchema(schema);
+			expect(result).to.not.have.property('prefixItems');
+			expect(result.items).to.equal(true);
+			expect(result).to.not.have.property('additionalItems');
+		});
 	});
 
 	describe('deep clone', () => {
