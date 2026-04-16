@@ -2788,3 +2788,69 @@ describe('audit gap coverage', () => {
 	});
 
 });
+
+describe('false schema collapsing (items: false)', () => {
+	it('should collapse per-item false-schema errors for items: [] with elements', () => {
+		const schema = {
+			type: 'array',
+			items: [] as any[],
+		};
+		const c = new Check(schema);
+		expect(() => c.test([1, 2, 3])).to.throw(
+			CheckError,
+			'`value` must not have any items.'
+		);
+	});
+
+	it('should pass when items: [] and input is empty array', () => {
+		const schema = {
+			type: 'array',
+			items: [] as any[],
+		};
+		const c = new Check(schema);
+		expect(() => c.test([])).to.not.throw();
+	});
+
+	it('should collapse nested false-schema errors with field name', () => {
+		const schema = {
+			type: 'object',
+			properties: {
+				answers: {
+					type: 'array',
+					items: [] as any[],
+				},
+			},
+		};
+		const c = new Check(schema);
+		expect(() => c.test({ answers: ['a', 'b', 'c'] })).to.throw(
+			CheckError,
+			'`answers` must not have any items.'
+		);
+	});
+
+	it('should preserve other errors alongside collapsed false-schema errors', () => {
+		const schema = {
+			type: 'object',
+			properties: {
+				answers: {
+					type: 'array',
+					items: [] as any[],
+				},
+				name: {
+					type: 'string',
+				},
+			},
+			required: ['name'],
+		};
+		const c = new Check(schema);
+		try {
+			c.test({ answers: [1, 2], name: 123 });
+			expect.fail('Expected CheckError to be thrown');
+		} catch (e: any) {
+			expect(e).to.be.instanceOf(CheckError);
+			// Should have both the collapsed items error and the type error
+			expect(e.message).to.include('must not have any items');
+			expect(e.message).to.include('name');
+		}
+	});
+});
