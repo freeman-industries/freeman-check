@@ -290,4 +290,99 @@ describe('normalizeSchema', () => {
 			expect(inner).to.not.have.property('additionalItems');
 		});
 	});
+
+	describe('draft-04 boolean exclusive min/max normalization', () => {
+		it('should convert boolean exclusiveMinimum to numeric', () => {
+			const schema = {
+				type: 'number' as const,
+				minimum: 5,
+				exclusiveMinimum: true,
+			};
+			const result = normalizeSchema(schema as any);
+			expect(result.exclusiveMinimum).to.equal(5);
+			expect(result).to.not.have.property('minimum');
+		});
+
+		it('should convert boolean exclusiveMaximum to numeric', () => {
+			const schema = {
+				type: 'number' as const,
+				maximum: 100,
+				exclusiveMaximum: true,
+			};
+			const result = normalizeSchema(schema as any);
+			expect(result.exclusiveMaximum).to.equal(100);
+			expect(result).to.not.have.property('maximum');
+		});
+
+		it('should not modify numeric exclusiveMinimum', () => {
+			const schema = {
+				type: 'number' as const,
+				exclusiveMinimum: 5,
+			};
+			const result = normalizeSchema(schema);
+			expect(result.exclusiveMinimum).to.equal(5);
+		});
+
+		it('should not modify when exclusiveMinimum is false', () => {
+			const schema = {
+				type: 'number' as const,
+				minimum: 5,
+				exclusiveMinimum: false,
+			};
+			const result = normalizeSchema(schema as any);
+			expect(result.minimum).to.equal(5);
+			expect(result.exclusiveMinimum).to.equal(false);
+		});
+
+		it('should convert boolean exclusiveMinimum nested in properties', () => {
+			const schema = {
+				type: 'object' as const,
+				properties: {
+					age: {
+						type: 'number',
+						minimum: 0,
+						exclusiveMinimum: true,
+					},
+				},
+			};
+			const result = normalizeSchema(schema as any);
+			const age = (result.properties as any).age;
+			expect(age.exclusiveMinimum).to.equal(0);
+			expect(age).to.not.have.property('minimum');
+		});
+	});
+
+	describe('legacy id keyword stripping', () => {
+		it('should strip id from root schema', () => {
+			const schema = {
+				id: 'http://example.com/schema',
+				type: 'object' as const,
+				properties: {
+					name: { type: 'string' },
+				},
+			};
+			const result = normalizeSchema(schema as any);
+			expect(result).to.not.have.property('id');
+			expect(result.type).to.equal('object');
+		});
+
+		it('should not strip $id', () => {
+			const schema = {
+				$id: 'http://example.com/schema',
+				type: 'object' as const,
+			};
+			const result = normalizeSchema(schema);
+			expect(result.$id).to.equal('http://example.com/schema');
+		});
+
+		it('should not mutate original schema when stripping id', () => {
+			const schema = {
+				id: 'http://example.com/schema',
+				type: 'object' as const,
+			};
+			const original = JSON.parse(JSON.stringify(schema));
+			normalizeSchema(schema as any);
+			expect(schema).to.deep.equal(original);
+		});
+	});
 });

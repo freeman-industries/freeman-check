@@ -2537,4 +2537,149 @@ describe('audit gap coverage', () => {
 		});
 	});
 
+	describe('legacy pattern audit', () => {
+		// Audit of Draft-07 (and earlier) keywords that changed in JSON Schema 2020-12.
+		// With Ajv2020 + strict:false, unknown keywords are silently ignored.
+		//
+		// Findings:
+		// - definitions + $ref:      ✅ Works natively (JSON Pointer resolution)
+		// - dependencies:            ✅ Works natively (Ajv2020 still supports it)
+		// - boolean exclusiveMin/Max: ⚠️ Silently ignored → NORMALIZED by normalizeSchema
+		// - id keyword:              ⚠️ Actively rejected → NORMALIZED by normalizeSchema (strip id)
+		// - type as array:           ✅ Works natively (supported in all drafts)
+		// - items array (tuples):    ⚠️ Silently ignored → NORMALIZED by normalizeSchema (Phase 01)
+		// - additionalItems:         ⚠️ Silently ignored → NORMALIZED by normalizeSchema (Phase 01)
+
+		describe('definitions keyword (draft-07)', () => {
+			it('should resolve $ref through legacy definitions', () => {
+				const check = new Check({
+					type: 'object',
+					definitions: {
+						Name: { type: 'string', minLength: 1 },
+					},
+					properties: {
+						name: { $ref: '#/definitions/Name' },
+					},
+				} as any);
+				expect(() => check.test({ name: 'Alice' })).to.not.throw();
+				expect(() => check.test({ name: '' })).to.throw(CheckError);
+				expect(() => check.test({ name: 123 })).to.throw(CheckError);
+			});
+
+			it('should resolve nested $ref through legacy definitions', () => {
+				const check = new Check({
+					type: 'object',
+					definitions: {
+						Coord: {
+							type: 'object',
+							properties: {
+								x: { type: 'number' },
+								y: { type: 'number' },
+							},
+							required: ['x', 'y'],
+						},
+					},
+					properties: {
+						position: { $ref: '#/definitions/Coord' },
+					},
+				} as any);
+				expect(() => check.test({ position: { x: 1, y: 2 } })).to.not.throw();
+				expect(() => check.test({ position: { x: 1 } })).to.throw(CheckError);
+			});
+		});
+
+		describe('dependencies keyword (draft-07)', () => {
+			it('should enforce property dependencies via legacy keyword', () => {
+				// dependencies is deprecated but still supported by Ajv2020 natively.
+				// No normalization needed — this test documents the audit finding.
+				const check = new Check({
+					type: 'object',
+					properties: {
+						credit_card: { type: 'string' },
+						billing_address: { type: 'string' },
+					},
+					dependencies: {
+						credit_card: ['billing_address'],
+					},
+				} as any);
+				expect(() => check.test({ credit_card: '1234', billing_address: '123 Main St' })).to.not.throw();
+				expect(() => check.test({ credit_card: '1234' })).to.throw(CheckError);
+				expect(() => check.test({ billing_address: '123 Main St' })).to.not.throw();
+			});
+		});
+
+		describe('boolean exclusiveMinimum/exclusiveMaximum (draft-04)', () => {
+			it('should enforce boolean exclusiveMinimum via normalization', () => {
+				const check = new Check({
+					type: 'object',
+					properties: {
+						score: {
+							type: 'number',
+							minimum: 5,
+							exclusiveMinimum: true,
+						},
+					},
+				} as any);
+				// After normalization: exclusiveMinimum: 5 (no minimum)
+				// score=5 should be REJECTED (exclusive)
+				expect(() => check.test({ score: 5 })).to.throw(CheckError);
+				expect(() => check.test({ score: 5.1 })).to.not.throw();
+				expect(() => check.test({ score: 4 })).to.throw(CheckError);
+			});
+
+			it('should enforce boolean exclusiveMaximum via normalization', () => {
+				const check = new Check({
+					type: 'object',
+					properties: {
+						score: {
+							type: 'number',
+							maximum: 100,
+							exclusiveMaximum: true,
+						},
+					},
+				} as any);
+				// After normalization: exclusiveMaximum: 100 (no maximum)
+				// score=100 should be REJECTED (exclusive)
+				expect(() => check.test({ score: 100 })).to.throw(CheckError);
+				expect(() => check.test({ score: 99.9 })).to.not.throw();
+				expect(() => check.test({ score: 101 })).to.throw(CheckError);
+			});
+		});
+
+		describe('id vs $id keyword', () => {
+			it('should strip legacy id keyword via normalization', () => {
+				// Draft-04 used `id` for schema identification.
+				// Draft-06+ uses `$id`. Ajv2020 actively rejects `id` with:
+				//   "NOT SUPPORTED: keyword 'id', use '$id' for schema ID"
+				// After normalization: `id` is stripped (schema identification
+				// is not used in freeman-check, so dropping it is safe).
+				const check = new Check({
+					id: 'http://example.com/schema',
+					type: 'object',
+					properties: {
+						name: { type: 'string' },
+					},
+				} as any);
+				expect(() => check.test({ name: 'Alice' })).to.not.throw();
+				expect(() => check.test({ name: 123 })).to.throw(CheckError);
+			});
+		});
+
+		describe('type as array', () => {
+			it('should support type as an array of types', () => {
+				// type as an array is supported in all JSON Schema drafts
+				// including 2020-12. No normalization needed.
+				const check = new Check({
+					type: 'object',
+					properties: {
+						value: { type: ['string', 'number'] },
+					},
+				});
+				expect(() => check.test({ value: 'hello' })).to.not.throw();
+				expect(() => check.test({ value: 42 })).to.not.throw();
+				expect(() => check.test({ value: true })).to.throw(CheckError);
+			});
+		});
+	});
+
 });

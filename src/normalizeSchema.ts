@@ -37,12 +37,15 @@ const MAP_OF_SCHEMAS_KEYWORDS = [
 ] as const;
 
 /**
- * Deep-clones a JSON Schema and recursively normalizes legacy Draft-07 tuple
+ * Deep-clones a JSON Schema and recursively normalizes legacy Draft-07/Draft-04
  * syntax to 2020-12 equivalents:
  *
  * - `items: [schemaA, schemaB]` → `prefixItems: [schemaA, schemaB]`
  * - `additionalItems: <value>` → `items: <value>`
  * - If `additionalItems` is absent, `items` defaults to `false`
+ * - `{ minimum: N, exclusiveMinimum: true }` → `{ exclusiveMinimum: N }`
+ * - `{ maximum: N, exclusiveMaximum: true }` → `{ exclusiveMaximum: N }`
+ * - `id: <string>` is stripped (Ajv2020 rejects it; use `$id` instead)
  *
  * The original schema is never mutated.
  */
@@ -73,6 +76,23 @@ function normalizeNode(node: Record<string, unknown>): void {
 		} else {
 			node.items = false;
 		}
+	}
+
+	// --- Convert Draft-04 boolean exclusiveMinimum ---
+	if (node.exclusiveMinimum === true && typeof node.minimum === 'number') {
+		node.exclusiveMinimum = node.minimum;
+		delete node.minimum;
+	}
+
+	// --- Convert Draft-04 boolean exclusiveMaximum ---
+	if (node.exclusiveMaximum === true && typeof node.maximum === 'number') {
+		node.exclusiveMaximum = node.maximum;
+		delete node.maximum;
+	}
+
+	// --- Strip legacy id keyword (Ajv2020 rejects it) ---
+	if ('id' in node && typeof node.id === 'string') {
+		delete node.id;
 	}
 
 	// --- Descend into array-of-schemas keywords ---
