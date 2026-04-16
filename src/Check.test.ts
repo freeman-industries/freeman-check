@@ -2680,6 +2680,31 @@ describe('audit gap coverage', () => {
 				expect(() => check.test({ value: true })).to.throw(CheckError);
 			});
 		});
+
+		describe('empty items array normalization', () => {
+			it('should not throw on construction with items: [] and additionalItems: false', () => {
+				const check = new Check({
+					type: 'array',
+					items: [],
+					additionalItems: false,
+				} as any);
+				// Empty array should pass (no items, none allowed)
+				expect(() => check.test([])).to.not.throw();
+				// Non-empty array should fail (no items allowed)
+				expect(() => check.test(['a'])).to.throw(CheckError);
+			});
+
+			it('should not throw on construction with items: [] and no additionalItems', () => {
+				const check = new Check({
+					type: 'array',
+					items: [],
+				} as any);
+				// Empty array should pass
+				expect(() => check.test([])).to.not.throw();
+				// Non-empty array should fail (default is items: false)
+				expect(() => check.test(['a'])).to.throw(CheckError);
+			});
+		});
 	});
 
 });

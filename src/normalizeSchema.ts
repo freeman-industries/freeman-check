@@ -65,11 +65,20 @@ function normalizeNode(node: Record<string, unknown>): void {
 	}
 
 	// --- Convert legacy tuple syntax ---
-	if (Array.isArray(node.items)) {
+	if (Array.isArray(node.items) && node.items.length > 0) {
 		// Move items array to prefixItems
 		node.prefixItems = node.items;
 
 		// Convert additionalItems → items (default to false if absent)
+		if ('additionalItems' in node) {
+			node.items = node.additionalItems;
+			delete node.additionalItems;
+		} else {
+			node.items = false;
+		}
+	} else if (Array.isArray(node.items) && node.items.length === 0) {
+		// Empty tuple: no prefixItems needed (empty array is a no-op)
+		// Still convert additionalItems → items (default to false if absent)
 		if ('additionalItems' in node) {
 			node.items = node.additionalItems;
 			delete node.additionalItems;
