@@ -37,6 +37,86 @@ describe('Check class', () => {
 		});
 	});
 
+	describe('schema compilation errors', () => {
+		it('should throw a clean error for invalid items value (string)', () => {
+			const schema = {
+				type: 'array',
+				items: 'not an array',
+			};
+			expect(() => new Check(schema)).to.throw(
+				CheckError,
+				'Schema is invalid: "items" must be an object or boolean.'
+			);
+		});
+
+		it('should throw a clean error for invalid type value', () => {
+			const schema = {
+				type: 12345,
+			};
+			expect(() => new Check(schema)).to.throw(CheckError);
+			// Verify it starts with "Schema is invalid:" and doesn't repeat
+			try {
+				new Check(schema);
+			} catch (e: any) {
+				expect(e.message).to.match(/^Schema is invalid:/);
+				// Should NOT have the same path repeated multiple times in sequence
+				const occurrences = (e.message.match(/"type"/g) || []).length;
+				expect(occurrences).to.be.at.most(3);
+			}
+		});
+
+		it('should throw a clean error for deeply nested invalid schema', () => {
+			const schema = {
+				type: 'object',
+				properties: {
+					config: {
+						type: 'object',
+						properties: {
+							tags: {
+								type: 'array',
+								items: 'invalid',
+							},
+						},
+					},
+				},
+			};
+			expect(() => new Check(schema)).to.throw(CheckError);
+			try {
+				new Check(schema);
+			} catch (e: any) {
+				expect(e.message).to.match(/^Schema is invalid:/);
+				expect(e.message).to.include('properties.config.properties.tags.items');
+			}
+		});
+
+		it('should include the schema on the thrown CheckError', () => {
+			const schema = {
+				type: 'array',
+				items: 'invalid',
+			};
+			try {
+				new Check(schema);
+				expect.fail('Expected CheckError to be thrown');
+			} catch (e: any) {
+				expect(e).to.be.instanceOf(CheckError);
+				expect(e.schema).to.deep.equal(schema);
+			}
+		});
+
+		it('should still compile valid schemas without error', () => {
+			const schema = {
+				type: 'object',
+				properties: {
+					name: { type: 'string' },
+					age: { type: 'number' },
+					tags: { type: 'array', items: { type: 'string' } },
+				},
+				required: ['name'],
+			};
+			expect(() => new Check(schema)).to.not.throw();
+		});
+	});
+
 	describe('test method', () => {
 		it('should throw an error if object is null or undefined', () => {
 			expect(() => check(schema).test(null)).to.throw(CheckError, 'The first argument is null or undefined.');
@@ -2707,4 +2787,70 @@ describe('audit gap coverage', () => {
 		});
 	});
 
+});
+
+describe('false schema collapsing (items: false)', () => {
+	it('should collapse per-item false-schema errors for items: [] with elements', () => {
+		const schema = {
+			type: 'array',
+			items: [] as any[],
+		};
+		const c = new Check(schema);
+		expect(() => c.test([1, 2, 3])).to.throw(
+			CheckError,
+			'`value` must not have any items.'
+		);
+	});
+
+	it('should pass when items: [] and input is empty array', () => {
+		const schema = {
+			type: 'array',
+			items: [] as any[],
+		};
+		const c = new Check(schema);
+		expect(() => c.test([])).to.not.throw();
+	});
+
+	it('should collapse nested false-schema errors with field name', () => {
+		const schema = {
+			type: 'object',
+			properties: {
+				answers: {
+					type: 'array',
+					items: [] as any[],
+				},
+			},
+		};
+		const c = new Check(schema);
+		expect(() => c.test({ answers: ['a', 'b', 'c'] })).to.throw(
+			CheckError,
+			'`answers` must not have any items.'
+		);
+	});
+
+	it('should preserve other errors alongside collapsed false-schema errors', () => {
+		const schema = {
+			type: 'object',
+			properties: {
+				answers: {
+					type: 'array',
+					items: [] as any[],
+				},
+				name: {
+					type: 'string',
+				},
+			},
+			required: ['name'],
+		};
+		const c = new Check(schema);
+		try {
+			c.test({ answers: [1, 2], name: 123 });
+			expect.fail('Expected CheckError to be thrown');
+		} catch (e: any) {
+			expect(e).to.be.instanceOf(CheckError);
+			// Should have both the collapsed items error and the type error
+			expect(e.message).to.include('must not have any items');
+			expect(e.message).to.include('name');
+		}
+	});
 });

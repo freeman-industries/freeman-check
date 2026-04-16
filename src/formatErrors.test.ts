@@ -751,3 +751,82 @@ describe('formatMessage', () => {
 		expect(result).to.equal('`name` needs to be a `string`.');
 	});
 });
+
+describe('normalizeErrors — false schema collapsing', () => {
+	it('should collapse root-level false-schema array errors into single message', () => {
+		// Simulates items: false with [1, 2, 3]
+		const errors: ErrorObject[] = [
+			mockError({ keyword: 'false schema', instancePath: '/0', schemaPath: '#/items' }),
+			mockError({ keyword: 'false schema', instancePath: '/1', schemaPath: '#/items' }),
+			mockError({ keyword: 'false schema', instancePath: '/2', schemaPath: '#/items' }),
+		];
+		const result = normalizeErrors(errors);
+		expect(result).to.deep.equal([
+			{ field: 'value', problem: 'must not have any items' },
+		]);
+	});
+
+	it('should collapse nested false-schema array errors into single message', () => {
+		// Simulates properties.answers with items: false and ['a', 'b']
+		const errors: ErrorObject[] = [
+			mockError({ keyword: 'false schema', instancePath: '/answers/0', schemaPath: '#/properties/answers/items' }),
+			mockError({ keyword: 'false schema', instancePath: '/answers/1', schemaPath: '#/properties/answers/items' }),
+		];
+		const result = normalizeErrors(errors);
+		expect(result).to.deep.equal([
+			{ field: 'answers', problem: 'must not have any items' },
+		]);
+	});
+
+	it('should not collapse a single false-schema error', () => {
+		// Only one item — don't collapse
+		const errors: ErrorObject[] = [
+			mockError({ keyword: 'false schema', instancePath: '/0', schemaPath: '#/items' }),
+		];
+		const result = normalizeErrors(errors);
+		expect(result).to.deep.equal([
+			{ field: '[0]', problem: 'is not allowed' },
+		]);
+	});
+
+	it('should preserve non-false-schema errors alongside collapsed ones', () => {
+		// Mix: false-schema items + a type error
+		const errors: ErrorObject[] = [
+			mockError({ keyword: 'false schema', instancePath: '/0', schemaPath: '#/items' }),
+			mockError({ keyword: 'false schema', instancePath: '/1', schemaPath: '#/items' }),
+			mockError({ keyword: 'type', instancePath: '/name', schemaPath: '#/properties/name/type', params: { type: 'string' } }),
+		];
+		const result = normalizeErrors(errors);
+		expect(result).to.have.length(2);
+
+		const fields = result.map((r) => r.field);
+		expect(fields).to.include('value');
+		expect(fields).to.include('name');
+
+		const valueError = result.find((r) => r.field === 'value');
+		expect(valueError!.problem).to.equal('must not have any items');
+
+		const nameError = result.find((r) => r.field === 'name');
+		expect(nameError!.problem).to.equal('needs to be a `string`');
+	});
+
+	it('should collapse multiple independent groups separately', () => {
+		// Two different parents: root-level and nested
+		const errors: ErrorObject[] = [
+			mockError({ keyword: 'false schema', instancePath: '/0', schemaPath: '#/items' }),
+			mockError({ keyword: 'false schema', instancePath: '/1', schemaPath: '#/items' }),
+			mockError({ keyword: 'false schema', instancePath: '/nested/0', schemaPath: '#/properties/nested/items' }),
+			mockError({ keyword: 'false schema', instancePath: '/nested/1', schemaPath: '#/properties/nested/items' }),
+		];
+		const result = normalizeErrors(errors);
+		expect(result).to.have.length(2);
+
+		const fields = result.map((r) => r.field);
+		expect(fields).to.include('value');
+		expect(fields).to.include('nested');
+
+		for (const entry of result) {
+			expect(entry.problem).to.equal('must not have any items');
+		}
+	});
+});

@@ -325,6 +325,77 @@ function findBestBranchErrors(
 }
 
 /**
+ * Detects groups of "is not allowed" errors that share a parent path and
+ * differ only by array index, and collapses each group into a single
+ * "must not have any items" error.
+ *
+ * Example:
+ *   [{ field: '[0]', problem: 'is not allowed' },
+ *    { field: '[1]', problem: 'is not allowed' },
+ *    { field: '[2]', problem: 'is not allowed' }]
+ * →
+ *   [{ field: 'value', problem: 'must not have any items' }]
+ *
+ * Nested example:
+ *   [{ field: 'answers[0]', problem: 'is not allowed' },
+ *    { field: 'answers[1]', problem: 'is not allowed' }]
+ * →
+ *   [{ field: 'answers', problem: 'must not have any items' }]
+ */
+function collapseFalseSchemaErrors(
+	results: Array<{ field: string; problem: string }>
+): Array<{ field: string; problem: string }> {
+	// Separate "is not allowed" errors with array-index fields from everything else
+	const arrayItemPattern = /^(.*?)\.?\[(\d+)\]$/;
+	const collapsible: Map<string, number> = new Map();
+	const other: Array<{ field: string; problem: string }> = [];
+
+	for (const entry of results) {
+		if (entry.problem !== 'is not allowed') {
+			other.push(entry);
+			continue;
+		}
+
+		const match = entry.field.match(arrayItemPattern);
+		if (!match) {
+			other.push(entry);
+			continue;
+		}
+
+		// Parent path: '' for root-level ([0], [1]), 'answers' for answers[0], answers[1]
+		const parent = match[1] as string;
+		collapsible.set(parent, (collapsible.get(parent) || 0) + 1);
+	}
+
+	// Only collapse groups with 2+ errors (a single [0] error stays as-is)
+	const collapsed: Array<{ field: string; problem: string }> = [];
+	const collapsedParents = new Set<string>();
+
+	for (const [parent, count] of collapsible) {
+		if (count >= 2) {
+			const field = parent || 'value';
+			collapsed.push({ field, problem: 'must not have any items' });
+			collapsedParents.add(parent);
+		}
+	}
+
+	// Re-add non-collapsed "is not allowed" entries
+	for (const entry of results) {
+		if (entry.problem !== 'is not allowed') continue;
+
+		const match = entry.field.match(arrayItemPattern);
+		if (!match) continue;
+
+		const parent = match[1] as string;
+		if (!collapsedParents.has(parent)) {
+			other.push(entry);
+		}
+	}
+
+	return [...collapsed, ...other];
+}
+
+/**
  * Filters, maps, and deduplicates AJV errors into field/problem tuples.
  *
  * - Filters out child errors from oneOf/anyOf compounds (unless discriminator is present)
@@ -388,9 +459,12 @@ function normalizeErrors(errors: ErrorObject[]): Array<{ field: string; problem:
 		problem: formatProblem(error),
 	}));
 
+	// Step 4.5: Collapse false-schema array-item errors into single messages
+	const collapsed = collapseFalseSchemaErrors(results);
+
 	// Step 5: Deduplicate by (field, problem) tuple
 	const seen = new Set<string>();
-	return results.filter(({ field, problem }) => {
+	return collapsed.filter(({ field, problem }) => {
 		const key = `${field}::${problem}`;
 		if (seen.has(key)) return false;
 		seen.add(key);
