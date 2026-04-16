@@ -2331,31 +2331,195 @@ describe('audit gap coverage', () => {
 		});
 	});
 
+	describe('tuple schema normalization', () => {
+		it('should validate a root-level legacy tuple schema', () => {
+			const check = new Check({
+				type: 'array',
+				items: [{ type: 'string' }, { type: 'number' }],
+			});
+			// Valid tuple
+			expect(() => check.test(['hello', 42])).to.not.throw();
+			// Wrong type at index 0
+			expect(() => check.test([123, 42])).to.throw(CheckError);
+			// Wrong type at index 1
+			expect(() => check.test(['hello', 'world'])).to.throw(CheckError);
+		});
+
+		it('should reject extra items when additionalItems is absent (defaults to false)', () => {
+			const check = new Check({
+				type: 'array',
+				items: [{ type: 'string' }, { type: 'number' }],
+			});
+			expect(() => check.test(['hello', 42, 'extra'])).to.throw(CheckError);
+		});
+
+		it('should reject extra items when additionalItems is false', () => {
+			const check = new Check({
+				type: 'array',
+				items: [{ type: 'string' }, { type: 'number' }],
+				additionalItems: false,
+			} as any);
+			expect(() => check.test(['hello', 42, 'extra'])).to.throw(CheckError);
+		});
+
+		it('should allow extra items when additionalItems is true', () => {
+			const check = new Check({
+				type: 'array',
+				items: [{ type: 'string' }, { type: 'number' }],
+				additionalItems: true,
+			} as any);
+			expect(() => check.test(['hello', 42, 'extra', true])).to.not.throw();
+		});
+
+		it('should validate extra items against additionalItems schema', () => {
+			const check = new Check({
+				type: 'array',
+				items: [{ type: 'string' }],
+				additionalItems: { type: 'number' },
+			} as any);
+			// Valid: extra items are numbers
+			expect(() => check.test(['hello', 1, 2, 3])).to.not.throw();
+			// Invalid: extra item is a string
+			expect(() => check.test(['hello', 1, 'bad'])).to.throw(CheckError);
+		});
+
+		it('should validate tuples nested inside properties', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					coords: {
+						type: 'array',
+						items: [{ type: 'number' }, { type: 'number' }],
+					},
+				},
+			});
+			expect(() => check.test({ coords: [1, 2] })).to.not.throw();
+			expect(() => check.test({ coords: ['a', 2] })).to.throw(CheckError);
+			expect(() => check.test({ coords: [1, 2, 3] })).to.throw(CheckError);
+		});
+
+		it('should validate tuples nested inside oneOf', () => {
+			const check = new Check({
+				type: 'array',
+				oneOf: [
+					{ items: [{ type: 'string' }, { type: 'string' }] },
+					{ items: [{ type: 'number' }, { type: 'number' }] },
+				],
+			});
+			expect(() => check.test(['hello', 'world'])).to.not.throw();
+			expect(() => check.test([1, 2])).to.not.throw();
+			expect(() => check.test(['hello', 2])).to.throw(CheckError);
+		});
+
+		it('should validate tuples nested inside anyOf', () => {
+			const check = new Check({
+				type: 'array',
+				anyOf: [
+					{ items: [{ type: 'string' }, { type: 'number' }] },
+					{ items: [{ type: 'number' }, { type: 'string' }] },
+				],
+			});
+			expect(() => check.test(['hello', 42])).to.not.throw();
+			expect(() => check.test([42, 'hello'])).to.not.throw();
+			expect(() => check.test([true, true])).to.throw(CheckError);
+		});
+
+		it('should validate tuples nested inside allOf', () => {
+			const check = new Check({
+				type: 'array',
+				allOf: [
+					{ items: [{ type: 'string' }] },
+					{ minItems: 1 },
+				],
+			});
+			expect(() => check.test(['hello'])).to.not.throw();
+			expect(() => check.test([])).to.throw(CheckError);
+			expect(() => check.test([123])).to.throw(CheckError);
+		});
+
+		it('should not mutate the original schema object', () => {
+			const schema = {
+				type: 'object' as const,
+				properties: {
+					coords: {
+						type: 'array',
+						items: [{ type: 'number' }, { type: 'number' }],
+						additionalItems: false,
+					},
+				},
+			};
+			const originalJson = JSON.stringify(schema);
+			new Check(schema as any);
+			expect(JSON.stringify(schema)).to.equal(originalJson);
+		});
+
+		it('should not affect schemas already using prefixItems', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					coords: {
+						type: 'array',
+						prefixItems: [
+							{ type: 'number' },
+							{ type: 'number' },
+						],
+						items: false,
+					},
+				},
+			});
+			expect(() => check.test({ coords: [1, 2] })).to.not.throw();
+			expect(() => check.test({ coords: [1, 2, 3] })).to.throw(CheckError);
+		});
+
+		it('should produce a readable error message for tuple violations', () => {
+			const check = new Check({
+				type: 'object',
+				properties: {
+					coords: {
+						type: 'array',
+						items: [{ type: 'number' }, { type: 'number' }],
+					},
+				},
+			});
+			expect(() => check.test({ coords: ['bad', 2] })).to.throw(
+				CheckError,
+				/coords/,
+			);
+		});
+
+		it('should produce a readable error message for extra items', () => {
+			const check = new Check({
+				type: 'array',
+				items: [{ type: 'string' }],
+			});
+			expect(() => check.test(['hello', 'extra'])).to.throw(
+				CheckError,
+				/must not have more than 1 item/,
+			);
+		});
+	});
+
 	describe('additionalItems verification', () => {
-		it('should confirm additionalItems is dead code in Ajv2020', () => {
-			// In JSON Schema 2020-12, `items` must be an object/boolean (not an array).
-			// The array form was replaced by `prefixItems`. Since Ajv2020 rejects
-			// `items` as an array, the `additionalItems` keyword can never fire.
-			//
-			// With `prefixItems` + `additionalItems: false`, AJV silently ignores
-			// additionalItems (it's not a 2020-12 keyword). Extra items pass validation.
-			//
-			// The `additionalItems` handler in formatProblem is harmless dead code.
+		it('should enforce additionalItems via normalization in Ajv2020', () => {
+			// Legacy Draft-07 tuple: items array + additionalItems.
+			// freeman-check normalizes this to prefixItems + items (2020-12).
 			const check = new Check({
 				type: 'object',
 				properties: {
 					tuple: {
 						type: 'array',
-						prefixItems: [
+						items: [
 							{ type: 'string' },
 							{ type: 'number' },
 						],
 						additionalItems: false,
-					} as any,
+					},
 				},
-			});
-			// Extra items are NOT rejected — additionalItems is ignored in 2020-12 mode
-			expect(() => check.test({ tuple: ['a', 1, 'extra'] })).to.not.throw();
+			} as any);
+			// Extra items ARE now rejected thanks to normalization
+			expect(() => check.test({ tuple: ['a', 1, 'extra'] })).to.throw(CheckError);
+			// Valid tuple passes
+			expect(() => check.test({ tuple: ['a', 1] })).to.not.throw();
 		});
 	});
 
@@ -2370,6 +2534,151 @@ describe('audit gap coverage', () => {
 					impossible: { enum: [] },
 				},
 			})).to.throw(Error, 'enum must have non-empty array');
+		});
+	});
+
+	describe('legacy pattern audit', () => {
+		// Audit of Draft-07 (and earlier) keywords that changed in JSON Schema 2020-12.
+		// With Ajv2020 + strict:false, unknown keywords are silently ignored.
+		//
+		// Findings:
+		// - definitions + $ref:      ✅ Works natively (JSON Pointer resolution)
+		// - dependencies:            ✅ Works natively (Ajv2020 still supports it)
+		// - boolean exclusiveMin/Max: ⚠️ Silently ignored → NORMALIZED by normalizeSchema
+		// - id keyword:              ⚠️ Actively rejected → NORMALIZED by normalizeSchema (strip id)
+		// - type as array:           ✅ Works natively (supported in all drafts)
+		// - items array (tuples):    ⚠️ Silently ignored → NORMALIZED by normalizeSchema (Phase 01)
+		// - additionalItems:         ⚠️ Silently ignored → NORMALIZED by normalizeSchema (Phase 01)
+
+		describe('definitions keyword (draft-07)', () => {
+			it('should resolve $ref through legacy definitions', () => {
+				const check = new Check({
+					type: 'object',
+					definitions: {
+						Name: { type: 'string', minLength: 1 },
+					},
+					properties: {
+						name: { $ref: '#/definitions/Name' },
+					},
+				} as any);
+				expect(() => check.test({ name: 'Alice' })).to.not.throw();
+				expect(() => check.test({ name: '' })).to.throw(CheckError);
+				expect(() => check.test({ name: 123 })).to.throw(CheckError);
+			});
+
+			it('should resolve nested $ref through legacy definitions', () => {
+				const check = new Check({
+					type: 'object',
+					definitions: {
+						Coord: {
+							type: 'object',
+							properties: {
+								x: { type: 'number' },
+								y: { type: 'number' },
+							},
+							required: ['x', 'y'],
+						},
+					},
+					properties: {
+						position: { $ref: '#/definitions/Coord' },
+					},
+				} as any);
+				expect(() => check.test({ position: { x: 1, y: 2 } })).to.not.throw();
+				expect(() => check.test({ position: { x: 1 } })).to.throw(CheckError);
+			});
+		});
+
+		describe('dependencies keyword (draft-07)', () => {
+			it('should enforce property dependencies via legacy keyword', () => {
+				// dependencies is deprecated but still supported by Ajv2020 natively.
+				// No normalization needed — this test documents the audit finding.
+				const check = new Check({
+					type: 'object',
+					properties: {
+						credit_card: { type: 'string' },
+						billing_address: { type: 'string' },
+					},
+					dependencies: {
+						credit_card: ['billing_address'],
+					},
+				} as any);
+				expect(() => check.test({ credit_card: '1234', billing_address: '123 Main St' })).to.not.throw();
+				expect(() => check.test({ credit_card: '1234' })).to.throw(CheckError);
+				expect(() => check.test({ billing_address: '123 Main St' })).to.not.throw();
+			});
+		});
+
+		describe('boolean exclusiveMinimum/exclusiveMaximum (draft-04)', () => {
+			it('should enforce boolean exclusiveMinimum via normalization', () => {
+				const check = new Check({
+					type: 'object',
+					properties: {
+						score: {
+							type: 'number',
+							minimum: 5,
+							exclusiveMinimum: true,
+						},
+					},
+				} as any);
+				// After normalization: exclusiveMinimum: 5 (no minimum)
+				// score=5 should be REJECTED (exclusive)
+				expect(() => check.test({ score: 5 })).to.throw(CheckError);
+				expect(() => check.test({ score: 5.1 })).to.not.throw();
+				expect(() => check.test({ score: 4 })).to.throw(CheckError);
+			});
+
+			it('should enforce boolean exclusiveMaximum via normalization', () => {
+				const check = new Check({
+					type: 'object',
+					properties: {
+						score: {
+							type: 'number',
+							maximum: 100,
+							exclusiveMaximum: true,
+						},
+					},
+				} as any);
+				// After normalization: exclusiveMaximum: 100 (no maximum)
+				// score=100 should be REJECTED (exclusive)
+				expect(() => check.test({ score: 100 })).to.throw(CheckError);
+				expect(() => check.test({ score: 99.9 })).to.not.throw();
+				expect(() => check.test({ score: 101 })).to.throw(CheckError);
+			});
+		});
+
+		describe('id vs $id keyword', () => {
+			it('should strip legacy id keyword via normalization', () => {
+				// Draft-04 used `id` for schema identification.
+				// Draft-06+ uses `$id`. Ajv2020 actively rejects `id` with:
+				//   "NOT SUPPORTED: keyword 'id', use '$id' for schema ID"
+				// After normalization: `id` is stripped (schema identification
+				// is not used in freeman-check, so dropping it is safe).
+				const check = new Check({
+					id: 'http://example.com/schema',
+					type: 'object',
+					properties: {
+						name: { type: 'string' },
+					},
+				} as any);
+				expect(() => check.test({ name: 'Alice' })).to.not.throw();
+				expect(() => check.test({ name: 123 })).to.throw(CheckError);
+			});
+		});
+
+		describe('type as array', () => {
+			it('should support type as an array of types', () => {
+				// type as an array is supported in all JSON Schema drafts
+				// including 2020-12. No normalization needed.
+				const check = new Check({
+					type: 'object',
+					properties: {
+						value: { type: ['string', 'number'] },
+					},
+				});
+				expect(() => check.test({ value: 'hello' })).to.not.throw();
+				expect(() => check.test({ value: 42 })).to.not.throw();
+				expect(() => check.test({ value: true })).to.throw(CheckError);
+			});
 		});
 	});
 

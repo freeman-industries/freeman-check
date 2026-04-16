@@ -413,6 +413,11 @@ describe('formatProblem', () => {
 			expect(formatProblem(error)).to.equal('must not have more than 3 items');
 		});
 
+		it('should format items error', () => {
+			const error = mockError({ keyword: 'items', instancePath: '/coords', params: { limit: 2 } });
+			expect(formatProblem(error)).to.equal('must not have more than 2 items');
+		});
+
 		it('should format dependencies', () => {
 			const error = mockError({ keyword: 'dependencies', params: { property: 'a', deps: 'b, c', depsCount: 2 } });
 			expect(formatProblem(error)).to.equal('has "a" which requires "b, c"');

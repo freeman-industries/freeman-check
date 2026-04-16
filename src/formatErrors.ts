@@ -213,6 +213,10 @@ function formatProblem(error: ErrorObject): string {
 			return `must not have more than ${(error.params as { limit: number }).limit} items`;
 		}
 
+		case 'items': {
+			return `must not have more than ${(error.params as { limit: number }).limit} items`;
+		}
+
 		case 'unevaluatedItems': {
 			return `must not have more than ${(error.params as { limit: number }).limit} items`;
 		}
